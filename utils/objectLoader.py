@@ -11,6 +11,47 @@ import os
 
 OBJ_PATH = os.path.expanduser('~/AR_python/Aumented_Reality/t_shirt_model/t_shirt.obj')
 
+from dataclasses import dataclass
+
+@dataclass
+class ObjModel:
+    vertices: np.ndarray
+    faces: np.ndarray
+
+    @staticmethod
+    def load_obj(path):
+        vertices = []
+        faces = []
+
+        with open(path, "r") as f:
+            for line in f:
+                if line.startswith("v "):
+                    vertices.append(list(map(float, line.split()[1:4])))
+                elif line.startswith("f "):
+                    faces.append([int(v.split("/")[0]) - 1 for v in line.split()[1:]])
+
+        vertices = normalize_vertices(vertices)
+
+        return ObjModel(
+            vertices=vertices.astype(np.float32),
+            faces=np.array(faces, dtype=np.uint32)
+        )
+
+    
+def normalize_vertices(vertices):
+    vertices = np.array(vertices, dtype=np.float32)    # ← CONVERSIÓN NECESARIA
+
+    min_v = vertices.min(axis=0)
+    max_v = vertices.max(axis=0)
+
+    size = max_v - min_v
+    scale = 1.0 / max(size)
+
+    center = (min_v + max_v) / 2.0
+
+    return (vertices - center) * scale
+
+
 def load_obj():
     """Cargar archivo OBJ"""
     vertices = []
