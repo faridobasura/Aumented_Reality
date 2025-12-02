@@ -18,12 +18,36 @@ from mediapipe.framework.formats import landmark_pb2
 from utils.objectLoader import ObjModel
 from utils import twoD_Render
 from utils.modelRenderer import ModelRenderer
+from utils.modelUtils import compute_torso_frame
 
 
 SHOULDER_LEFT = 11
 SHOULDER_RIGHT = 12
 HIP_LEFT = 23
 HIP_RIGHT = 24
+
+def debug_visualize_anchors(frame, landmarks, w, h):
+    """Dibuja círculos en los puntos ancla detectados"""
+    colors = {
+        "left_shoulder": (0, 0, 255),    # Rojo en BGR
+        "right_shoulder": (0, 255, 0),   # Verde
+        "left_hip": (255, 0, 0),         # Azul
+        "right_hip": (255, 255, 0)       # Cian
+    }
+    
+    for name, idx in [("left_shoulder", SHOULDER_LEFT),
+                      ("right_shoulder", SHOULDER_RIGHT),
+                      ("left_hip", HIP_LEFT),
+                      ("right_hip", HIP_RIGHT)]:
+        
+        x = int(landmarks[idx].x * w)
+        y = int(landmarks[idx].y * h)
+        
+        cv2.circle(frame, (x, y), 10, colors[name], -1)
+        cv2.putText(frame, name, (x+15, y), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, colors[name], 2)
+    
+    return frame
 
 # Rutas de archivos
 shirt_path = os.path.expanduser('~/AR_python/Aumented_Reality/Black_T_Shirt_PNG_Clip_Art-3107.png')
@@ -55,33 +79,57 @@ def parse_arguments():
 
     return parser.parse_args()
 
-def render_shirt_adaptive(model_renderer, torso_width, torso_height, angle, render_mode):
-    """
-    Renderiza el modelo 3D con OpenGL en un tamaño adaptado al torso.
-    Devuelve una imagen RGBA con transparencia.
-    """
+def render_shirt_adaptive(model_renderer, torso_width, torso_height, angle, render_mode, 
+                         translation=None, rotation=None, scale=None,
+                         detected_width=None):
     if model_renderer is None:
         return None
 
-    # 1) Configurar tamaño del viewport (FBO)
     model_renderer.set_viewport(torso_width, torso_height)
-
-    # 2) Aplicar rotación o transformaciones
-    model_renderer.set_rotation(0, angle, 0)
-
-    # 3) Configurar modo de render según argumentos
     model_renderer.set_render_mode(render_mode)
 
-    # 4) Renderizar a textura o FBO interno del renderer
-    raw_frame = model_renderer.render_to_image()
+    if translation is not None and rotation is not None and scale is not None:
+        model_renderer.set_model_transform(translation, rotation, scale)
 
+    raw_frame = model_renderer.render_to_image()
     if raw_frame is None:
         return None
-
-    # 5) Convertir wireframe/solid a imagen con transparencia
+    
+    # Verificar si el método existe antes de llamarlo
+    if hasattr(model_renderer, 'debug_draw_anchor_vertices'):
+        try:
+            model_renderer.debug_draw_anchor_vertices()
+        except Exception as e:
+            print(f"⚠️  Error en debug_draw_anchor_vertices: {e}")
+    
     rgba = twoD_Render.opengl_to_transparent_rgba(raw_frame)
-
     return rgba
+
+def correct_coordinate_system(translation, rotation_mat):
+    """
+    Corrige diferencias entre MediaPipe y OpenGL.
+    MediaPipe: Z hacia cámara, Y abajo, X derecha
+    OpenGL: Y arriba, Z atrás, X derecha
+    """
+    # 1. Corrección de ejes
+    axis_correction = np.array([
+        [1,  0,  0],  # X: igual
+        [0,  0, -1],  # Y: se convierte en -Z (arriba/abajo -> adelante/atrás)
+        [0,  1,  0]   # Z: se convierte en Y (adelante/atrás -> arriba/abajo)
+    ])
+    
+    # 2. Aplicar corrección
+    rotation_corrected = rotation_mat @ axis_correction
+    
+    # 3. Invertir rotación si es necesario (para giro correcto)
+    # Si al girar a la izquierda el modelo gira a la derecha:
+    rotation_corrected[:, 0] = -rotation_corrected[:, 0]  # Invertir eje X
+    
+    # 4. Ajustar posición (altura)
+    # MediaPipe Y aumenta hacia abajo, OpenGL Y aumenta hacia arriba
+    translation[1] = -translation[1]  # Invertir Y
+    
+    return translation, rotation_corrected
 
             
 def mediaPipeRender():
@@ -123,6 +171,8 @@ def mediaPipeRender():
             obj_loaded = ObjModel.load_obj(obj_path)
             if obj_loaded is not None:
                 model_renderer = ModelRenderer(width=512, height=512, obj=obj_loaded)
+                model_renderer.set_render_mode(args.render_mode)
+
                 print("Modelo 3D cargado correctamente.")
             else:
                 print("objectLoader devolvió None para el OBJ.")
@@ -131,7 +181,6 @@ def mediaPipeRender():
             logger.error(f"Error cargando OBJ: {e}")
             args.use_3d = False
     
-    model_renderer.set_render_mode(args.render_mode)
 
     # ─────────────────────────────
     # 3) Inicializar MediaPipe POSE
@@ -209,14 +258,49 @@ def mediaPipeRender():
                 # ---- Si los dos hombros y ambas caderas son visibles procedemos ----
                 if visible_shoulders and visible_hips:
 
+                    # después de calcular visible_shoulders and visible_hips
                     if args.use_3d and model_renderer:
-                        img_3d = render_shirt_adaptive(
-                            model_renderer,
-                            torso_width,
-                            torso_height,
-                            angle,
-                            args.render_mode
-                        )
+                        # get 3D points
+                        if getattr(results, "pose_world_landmarks", None):
+                            pl = results.pose_world_landmarks.landmark
+                            # NOTA: Los índices 11 y 12 en MediaPipe son correctos
+                            pL = np.array([pl[SHOULDER_LEFT].x, pl[SHOULDER_LEFT].y, pl[SHOULDER_LEFT].z])
+                            pR = np.array([pl[SHOULDER_RIGHT].x, pl[SHOULDER_RIGHT].y, pl[SHOULDER_RIGHT].z])
+                         
+                            # Calcular centro de caderas
+                            pH_left = np.array([pl[HIP_LEFT].x, pl[HIP_LEFT].y, pl[HIP_LEFT].z])
+                            pH_right = np.array([pl[HIP_RIGHT].x, pl[HIP_RIGHT].y, pl[HIP_RIGHT].z])
+                            pH = (pH_left + pH_right) / 2.0
+                         
+                            # 1. Calcular frame del torso
+                            translation, rotation_mat, detected_width = compute_torso_frame(pL, pR, pH)
+                         
+                            # 2. CORREGIR sistema de coordenadas
+                            translation, rotation_mat = correct_coordinate_system(translation, rotation_mat)
+                         
+                            # 3. Calcular escala (con los índices CORREGIDOS)
+                            if model_renderer.model_shoulder_dist > 0:
+                                scale = detected_width / model_renderer.model_shoulder_dist
+                                # Aumentar escala para visibilidad
+                                scale *= 2.5  # Más grande
+                            else:
+                                scale = 1.0
+                         
+                            # 4. Ajustar posición vertical
+                            # Subir el modelo para que los hombros coincidan
+                            translation[1] += 0.3  # Ajusta este valor
+                         
+                            # 5. Renderizar
+                            img_3d = render_shirt_adaptive(
+                                model_renderer,
+                                torso_width,
+                                torso_height,
+                                angle,
+                                args.render_mode,
+                                translation=translation,
+                                rotation=rotation_mat,
+                                scale=scale
+                            )
 
                         if img_3d is not None:
                             frame = twoD_Render.overlay_transparent(frame, img_3d, x, y)
