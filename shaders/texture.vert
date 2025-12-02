@@ -8,6 +8,11 @@ uniform mat4 mvp;
 out vec2 v_uv;
 
 void main() {
-    gl_Position = mvp * vec4(in_pos, 1.0);
-    v_uv = in_uv;
+    // DEBUG: Posición de prueba (cuadrado completo)
+    float x = float(gl_VertexID % 2) * 2.0 - 1.0;
+    float y = float(gl_VertexID / 2) * 2.0 - 1.0;
+    gl_Position = vec4(x, y, 0.0, 1.0);
+    
+    // UVs de prueba
+    v_uv = vec2(x * 0.5 + 0.5, y * 0.5 + 0.5);
 }
