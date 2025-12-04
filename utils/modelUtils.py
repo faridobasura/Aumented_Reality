@@ -25,11 +25,9 @@ def compute_torso_frame(pL, pR, pH):
     x_axis = shoulder_vector / shoulder_dist
     
     # Eje Y: hacia ARRIBA (perpendicular al vector torso)
-    # Vector de hombros a caderas
     torso_vector = pH - translation
     
-    # Si el torso_vector apunta hacia abajo (Y negativo en OpenGL),
-    # invertirlo para que apunte hacia arriba
+    # Si el torso_vector apunta hacia abajo, invertirlo
     if torso_vector[1] < 0:
         torso_vector = -torso_vector
     
@@ -43,18 +41,33 @@ def compute_torso_frame(pL, pR, pH):
     y_axis = np.cross(z_axis, x_axis)
     y_axis = y_axis / np.linalg.norm(y_axis)
     
-    # 3. Matriz de rotación CORREGIDA para OpenGL
-    # OpenGL: Y arriba, X derecha, Z atrás
+    # 3. Matriz de rotación - VERIFICAR SIGNOS
+    # CORRECCIÓN: Si el modelo gira al revés, invertir eje X
+    # Prueba estas opciones:
+    
+    # Opción A: Invertir solo eje X (para corregir giro contrario)
+    x_axis = -x_axis  # <- Agrega esta línea si el giro es inverso
+    
+    # Opción B: Invertir ambos, X y Z (rotación 180° en Y)
+    # x_axis = -x_axis
+    # z_axis = -z_axis
+    
+    # Opción C: Cambiar orden de columnas si es necesario
+    # OpenGL típico: columnas = [derecha, arriba, adelante]
     rotation_mat = np.column_stack([x_axis, y_axis, z_axis])
     
-    # 4. CORRECCIÓN ESPECÍFICA para modelo que mira hacia abajo
-    # Rota 90° alrededor del eje X para que mire hacia adelante
-    correction_x = np.array([
-        [1, 0, 0],
-        [0, 0, -1],  # Cambia Y por Z negativo
-        [0, 1, 0]    # Cambia Z por Y
+    # 4. CORRECCIÓN para que modelo mire hacia la cámara
+    # Si el modelo en Blender mira hacia -Z, necesitamos rotarlo
+    correction = np.eye(3)
+    
+    # Si el modelo está de espaldas, rotar 180° en Y
+    correction_180_y = np.array([
+        [-1.0, 0.0, 0.0],
+        [ 0.0, 1.0, 0.0],
+        [ 0.0, 0.0, -1.0]
     ])
     
-    rotation_mat = rotation_mat @ correction_x
+    # Aplicar corrección si es necesario
+    rotation_mat = rotation_mat @ correction_180_y
     
     return translation, rotation_mat, shoulder_dist

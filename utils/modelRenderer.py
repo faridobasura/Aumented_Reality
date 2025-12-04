@@ -28,8 +28,15 @@ class ModelRenderer:
         
         # Calcular propiedades
         if obj:
+            # Verificar orientación del modelo
+            self.check_model_orientation()
+
             self.model_shoulder_dist = self._calculate_shoulder_distance()
             self.model_anchor_offset = self._calculate_anchor_offset()
+
+            # DEBUG: Imprimir información de vértices ancla
+            self.debug_draw_anchor_vertices()
+
             print(f"✅ Modelo cargado: {len(obj.vertices)} vértices")
             print(f"✅ Distancia entre hombros: {self.model_shoulder_dist:.4f}")
         else:
@@ -122,23 +129,28 @@ class ModelRenderer:
         if not glfw.init():
             raise RuntimeError("No se pudo inicializar GLFW")
 
-        # Configurar ventana oculta CON CORE PROFILE
+        # Configurar ventana completamente oculta
         glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
         glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
         glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
-        glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)  # ¡IMPORTANTE!
-        glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, GL_TRUE)  # ¡IMPORTANTE para macOS/Linux!
+        glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
+        glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, GL_TRUE)
 
-        self.window = glfw.create_window(1, 1, "Hidden", None, None)
+        # Crear ventana pequeña y oculta
+        self.window = glfw.create_window(1, 1, "Hidden Render Context", None, None)
         if not self.window:
             glfw.terminate()
-            raise RuntimeError("No se pudo crear ventana GLFW")
+            raise RuntimeError("No se pudo crear ventana GLFW oculta")
 
         glfw.make_context_current(self.window)
 
-        # Verificar que OpenGL 3.3 está disponible
-        print(f"✅ OpenGL version: {glGetString(GL_VERSION).decode()}")
-        print(f"✅ GLSL version: {glGetString(GL_SHADING_LANGUAGE_VERSION).decode()}")
+        # Ocultar completamente la ventana
+        glfw.hide_window(self.window)
+
+        # Verificar que esté oculta
+        print(f"✅ Contexto OpenGL creado (ventana oculta)")
+        print(f"   OpenGL version: {glGetString(GL_VERSION).decode()}")
+        print(f"   GLSL version: {glGetString(GL_SHADING_LANGUAGE_VERSION).decode()}")
     
     def _calculate_shoulder_distance(self):
         """Calcula distancia entre hombros"""
@@ -197,9 +209,20 @@ class ModelRenderer:
 
     
     def set_model_transform(self, translation, rotation_mat, scale):
+        """Asegura que la traslación sea un vector plano"""
+        # Aplanar la traslación si es necesario
+        if isinstance(translation, np.ndarray) and translation.ndim > 1:
+            translation = translation.flatten()
+
         self.model_translation = np.array(translation, dtype=np.float32)
         self.model_rotation = np.array(rotation_mat, dtype=np.float32)
         self.model_scale = float(scale)
+
+        # Debug: verificar formas
+        print(f"🎯 set_model_transform:")
+        print(f"   Translation shape: {self.model_translation.shape}")
+        print(f"   Rotation shape: {self.model_rotation.shape}")
+        print(f"   Scale: {self.model_scale}")
     
     def set_render_mode(self, mode):
         self.render_mode = mode
@@ -298,21 +321,33 @@ class ModelRenderer:
         
         # Convertir a array numpy 2D
         return np.array(tri_verts, dtype=np.float32).reshape(-1, 3)
-    
+
     def _apply_transform(self):
         """Crea matrices de transformación"""
+        # Asegurar que la traslación sea vector plano
+        if self.model_translation.ndim > 1:
+            self.model_translation = self.model_translation.flatten()
+
         self.model_matrix = np.eye(4, dtype=np.float32)
 
         scale_mat = np.eye(4)
         scale_mat[:3, :3] *= self.model_scale
 
-        rot_180_y = np.array([
-            [-1.0, 0.0, 0.0, 0.0],
-            [ 0.0, 1.0, 0.0, 0.0],
-            [ 0.0, 0.0, -1.0, 0.0],
-            [ 0.0, 0.0, 0.0, 1.0]
+        # Rotación 180° en X
+        # Ángulo de 180 grados en radianes = π
+        angle = np.pi  # 180 grados
+        cos_a = np.cos(angle)
+        sin_a = np.sin(angle)
+
+        rot_180_x = np.array([
+            [1.0,  0.0,   0.0, 0.0],
+            [0.0,  cos_a, -sin_a, 0.0],
+            [0.0,  sin_a,  cos_a, 0.0],
+            [0.0,  0.0,   0.0, 1.0]
         ], dtype=np.float32)
 
+        # Para 180°, cos(π) = -1, sin(π) = 0
+        # Así que la matriz se simplifica a:
         rot_180_x = np.array([
             [1.0,  0.0,  0.0, 0.0],
             [0.0, -1.0,  0.0, 0.0],
@@ -320,24 +355,48 @@ class ModelRenderer:
             [0.0,  0.0,  0.0, 1.0]
         ], dtype=np.float32)
 
-        rot_mat = rot_180_y @ rot_180_x
+        rot_initial = rot_180_x
 
+        # Rotación del usuario
         user_rot_mat = np.eye(4)
         user_rot_mat[:3, :3] = self.model_rotation
 
-        # TRASLACIÓN
+        # Traslación - asegurar que es array 1D
         trans_mat = np.eye(4)
-        trans_mat[:3, 3] = self.model_translation
+        trans_mat[:3, 3] = self.model_translation.reshape(3)  # Asegurar forma (3,)
 
-        self.model_matrix = trans_mat @ user_rot_mat @ rot_mat @ scale_mat
+        self.model_matrix = trans_mat @ user_rot_mat @ rot_initial @ scale_mat
 
+        # Matriz de vista (cámara)
         self.view_matrix = np.eye(4)
 
-        self.proj_matrix = np.eye(4)
-        self.proj_matrix[0, 0] = 2.0 / 1.0
-        self.proj_matrix[1, 1] = 2.0 / 1.0
-        self.proj_matrix[2, 2] = -2.0 / 10.0
-        self.proj_matrix[3, 2] = -1.0
+        # Mover la cámara hacia atrás para ver mejor
+        self.view_matrix[2, 3] = -3.0  # Alejar cámara
+
+        # Matriz de proyección en perspectiva (más natural)
+        fov = 60.0  # Campo de visión en grados
+        aspect = self.width / max(self.height, 1)
+        near = 0.1
+        far = 100.0
+
+        # Proyección perspectiva
+        self.proj_matrix = self._perspective_projection(fov, aspect, near, far)
+    
+    def _perspective_projection(self, fov, aspect, near, far):
+        """Crea matriz de proyección en perspectiva"""
+        f = 1.0 / np.tan(np.radians(fov) / 2.0)
+        
+        proj = np.zeros((4, 4), dtype=np.float32)
+        proj[0, 0] = f / aspect
+        proj[1, 1] = f
+        proj[2, 2] = (far + near) / (near - far)
+        proj[2, 3] = (2.0 * far * near) / (near - far)
+        proj[3, 2] = -1.0
+        
+        return proj
+    
+    # Debug opcional
+    # print(f"📐 Model matrix:\n{self.model_matrix}")
     
     def set_viewport(self, w, h):
         self.width = w
@@ -372,40 +431,49 @@ class ModelRenderer:
         glViewport(0, 0, self.width, self.height)       
         glEnable(GL_DEPTH_TEST)
         glClearColor(0, 0, 0, 0)  # Fondo transparente
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)      
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)    
+
         # 1. ACTUALIZAR transformaciones antes de renderizar
-        self._apply_transform()  # ¡ESTO ES IMPORTANTE!     
-        # 2. Actualizar matriz de proyección según viewport
+        self._apply_transform()
+
         aspect = self.width / max(self.height, 1)
+        fov = 45.0
         near, far = 0.1, 100.0      
+
         # Proyección ortográfica ajustada
-        self.proj_matrix = np.eye(4)
-        if aspect >= 1.0:
-            self.proj_matrix[0, 0] = 1.0 / aspect
-            self.proj_matrix[1, 1] = 1.0
-        else:
-            self.proj_matrix[0, 0] = 1.0
-            self.proj_matrix[1, 1] = aspect     
-        self.proj_matrix[2, 2] = -2.0 / (far - near)
-        self.proj_matrix[3, 2] = -(far + near) / (far - near)       
-        # 3. Renderizar modelo principal
-        self._draw_model()      
-        # 4. ¡NUEVO! Dibujar vértices ancla con colores
-        self.draw_anchor_vertices_with_labels()  # O usa debug_draw_anchors_simple()        
-        # 5. Leer píxeles
+        self.proj_matrix = self._perspective_projection(fov, aspect, near, far)
+
+        # 3. Mover la cámara ligeramente para mejor vista
+        self.view_matrix = np.eye(4)
+        self.view_matrix[2, 3] = -2.5  # Alejar cámara
+        
+        # 4. Renderizar modelo principal
+        self._draw_model()
+        
+        # 5. Dibujar vértices ancla para debug
+        self.draw_anchor_vertices_with_labels()
+        
+        # 6. Leer píxeles
         buffer = glReadPixels(0, 0, self.width, self.height,
-                              GL_RGBA, GL_UNSIGNED_BYTE)        
-        glBindFramebuffer(GL_FRAMEBUFFER, 0)        
-        # 6. Convertir a numpy
+                              GL_RGBA, GL_UNSIGNED_BYTE)
+        
+        glBindFramebuffer(GL_FRAMEBUFFER, 0)
+        
+        # 7. Convertir a numpy
         img = np.frombuffer(buffer, dtype=np.uint8)\
-                .reshape(self.height, self.width, 4)        
-        img = cv2.flip(img, 0)
-        return img  
+                .reshape(self.height, self.width, 4)
+        
+        img = cv2.flip(img, 0)  # Flip vertical porque OpenGL tiene origen abajo
+        return img
     
     def draw_anchor_vertices_with_labels(self):
         """Dibuja vértices ancla con colores y etiquetas"""
         if self.obj_model is None:
             return
+
+        # Asegurar que tenemos matrices válidas
+        if not hasattr(self, 'model_matrix') or self.model_matrix is None:
+            self._apply_transform()
 
         # Usar el mismo shader que el modelo principal
         glUseProgram(self.shader_program)
@@ -469,3 +537,258 @@ class ModelRenderer:
         glDeleteBuffers(1, [vbo])
 
         glUseProgram(0)
+    
+    def align_model_with_landmarks(self, landmarks_3d, scale_multiplier=None):
+        """
+        Alinea el modelo para que sus vértices ancla coincidan con landmarks 3D
+        """
+        if self.obj_model is None:
+            print("❌ No hay modelo cargado")
+            return None, None, None
+    
+        # 1. Obtener vértices ancla del modelo
+        model_points = []
+        target_points = []
+        
+        # Variables para cálculos de hombros
+        model_left_shoulder = None
+        model_right_shoulder = None
+        target_left_shoulder = None
+        target_right_shoulder = None
+    
+        for name in self.ANCHOR_VERTEX_IDS.keys():
+            if name in landmarks_3d:
+                vertex_id = self.ANCHOR_VERTEX_IDS[name]
+                if vertex_id < len(self.obj_model.vertices):
+                    # Punto del modelo
+                    model_point = np.array(self.obj_model.vertices[vertex_id])
+                    model_points.append(model_point)
+    
+                    # Punto objetivo (landmark)
+                    target_point = np.array(landmarks_3d[name])
+                    target_points.append(target_point)
+                    
+                    # Guardar puntos de hombros para cálculo de distancia
+                    if name == "left_shoulder":
+                        model_left_shoulder = model_point
+                        target_left_shoulder = target_point
+                    elif name == "right_shoulder":
+                        model_right_shoulder = model_point
+                        target_right_shoulder = target_point
+    
+        if len(model_points) < 2:
+            print("❌ No hay suficientes puntos para alinear")
+            return None, None, None
+    
+        # Convertir a arrays numpy con forma (N, 3)
+        model_points_arr = np.array(model_points)  # (N, 3)
+        target_points_arr = np.array(target_points)  # (N, 3)
+    
+        print(f"✅ Alineando {len(model_points_arr)} puntos")
+        print(f"   Forma model_points: {model_points_arr.shape}")
+        print(f"   Forma target_points: {target_points_arr.shape}")
+    
+        # 2. Calcular centroides
+        model_centroid = np.mean(model_points_arr, axis=0)  # (3,)
+        target_centroid = np.mean(target_points_arr, axis=0)  # (3,)
+    
+        # 3. Centrar puntos
+        model_centered = model_points_arr - model_centroid  # (N, 3)
+        target_centered = target_points_arr - target_centroid  # (N, 3)
+    
+        # 4. Transponer para tener forma (3, N) para Procrustes
+        model_centered_T = model_centered.T  # (3, N)
+        target_centered_T = target_centered.T  # (3, N)
+    
+        # 5. Calcular rotación óptima (Procrustes)
+        H = model_centered_T @ target_centered_T.T  # (3, N) @ (N, 3) = (3, 3)
+        U, S, Vt = np.linalg.svd(H)
+        rotation = Vt.T @ U.T
+    
+        # Asegurar que es una rotación propia (det=1)
+        if np.linalg.det(rotation) < 0:
+            Vt[-1, :] *= -1
+            rotation = Vt.T @ U.T
+    
+        print(f"   Rotación shape: {rotation.shape}")
+    
+        # 6. Calcular distancias de hombros
+        if model_left_shoulder is not None and model_right_shoulder is not None:
+            model_shoulder_dist = np.linalg.norm(model_right_shoulder - model_left_shoulder)
+        else:
+            # Si no tenemos hombros, usar distancia promedio entre todos los puntos
+            model_shoulder_dist = self._calculate_average_distance(model_points_arr)
+        
+        if target_left_shoulder is not None and target_right_shoulder is not None:
+            target_shoulder_dist = np.linalg.norm(target_right_shoulder - target_left_shoulder)
+        else:
+            # Si no tenemos hombros, usar distancia promedio entre todos los puntos
+            target_shoulder_dist = self._calculate_average_distance(target_points_arr)
+    
+        # 7. Calcular escala base usando Procrustes
+        model_norm = np.trace(model_centered_T @ model_centered_T.T)  # traza de (3,3)
+        if model_norm > 0:
+            # target_centered_T.T @ rotation @ model_centered_T
+            # (3, N) @ (3, N).T -> ya no, mejor usar la forma estándar
+            scale_base = np.trace(target_centered_T.T @ rotation @ model_centered_T) / model_norm
+        else:
+            scale_base = 1.0
+    
+        print(f"   Escala base (Procrustes): {scale_base:.4f}")
+    
+        # 8. Calcular multiplicador de escala basado en distancias de hombros
+        if model_shoulder_dist > 0 and target_shoulder_dist > 0:
+            # Calcular factor basado en la relación de distancias
+            distance_ratio = target_shoulder_dist / model_shoulder_dist
+            
+            # FACTOR DE AJUSTE - Aumentar este valor si el modelo sigue pequeño
+            ADJUSTMENT_FACTOR = 3.5  # <-- Ajusta este valor según necesites
+            
+            if scale_multiplier is None:
+                scale_multiplier = distance_ratio * ADJUSTMENT_FACTOR
+            else:
+                print(f"   Usando multiplicador proporcionado: {scale_multiplier}")
+            
+            print(f"📏 Distancia hombros modelo: {model_shoulder_dist:.4f}")
+            print(f"📏 Distancia hombros landmarks: {target_shoulder_dist:.4f}")
+            print(f"📐 Relación de distancia: {distance_ratio:.4f}")
+            print(f"🎯 Multiplicador calculado: {scale_multiplier:.4f}")
+        else:
+            if scale_multiplier is None:
+                scale_multiplier = 2.5  # Valor por defecto más grande
+            print(f"⚠️  No se pudieron calcular distancias, usando multiplicador: {scale_multiplier}")
+        
+        # 9. ESCALA FINAL (combinar escala base con multiplicador)
+        scale = scale_base * scale_multiplier
+        
+        # 10. Verificar que la escala sea razonable
+        if scale > 5.0:
+            print(f"⚠️  Escala muy grande ({scale:.2f}), limitando a 5.0")
+            scale = 5.0
+        elif scale < 0.2:
+            print(f"⚠️  Escala muy pequeña ({scale:.2f}), aumentando a 0.5")
+            scale = 0.5
+    
+        # 11. Calcular traslación
+        # Para calcular la traslación, necesitamos aplicar la rotación y escala al centroide del modelo
+        # y ver la diferencia con el centroide objetivo
+        translation = target_centroid - scale * (rotation @ model_centroid)
+    
+        # 12. Aplicar transformación
+        self.model_rotation = rotation
+        self.model_scale = scale
+        self.model_translation = translation
+    
+        print(f"✅ Transformación final:")
+        print(f"   Escala base (Procrustes): {scale_base:.4f}")
+        print(f"   Multiplicador: {scale_multiplier:.4f}")
+        print(f"   Escala final: {scale:.4f}")
+        print(f"   Traslación: {translation}")
+    
+        # Verificar alineación
+        self.verify_alignment_quality(landmarks_3d)
+    
+        return rotation, scale, translation
+    
+    def _calculate_average_distance(self, points):
+        """Calcula la distancia promedio entre puntos"""
+        if len(points) < 2:
+            return 0.0
+        
+        # Calcular todas las distancias entre pares de puntos
+        distances = []
+        for i in range(len(points)):
+            for j in range(i + 1, len(points)):
+                dist = np.linalg.norm(points[i] - points[j])
+                distances.append(dist)
+        
+        return np.mean(distances) if distances else 0.0
+
+    def check_model_orientation(self):
+        """Verifica y corrige la orientación inicial del modelo"""
+        if self.obj_model is None:
+            return
+
+        # Verificar posición de hombros
+        ls_idx = self.ANCHOR_VERTEX_IDS["left_shoulder"]
+        rs_idx = self.ANCHOR_VERTEX_IDS["right_shoulder"]
+
+        if ls_idx < len(self.obj_model.vertices) and rs_idx < len(self.obj_model.vertices):
+            left_shoulder = np.array(self.obj_model.vertices[ls_idx])
+            right_shoulder = np.array(self.obj_model.vertices[rs_idx])
+
+            # Verificar si los hombros están invertidos (X positivo debería ser derecha)
+            if left_shoulder[0] > right_shoulder[0]:
+                print("⚠️  Modelo tiene hombros invertidos, aplicando rotación de 180° en Y")
+                # Aplicar rotación de 180° en Y solo si es necesario
+                rot_180_y = np.array([
+                    [-1.0, 0.0,  0.0],
+                    [ 0.0, 1.0,  0.0],
+                    [ 0.0, 0.0, -1.0]
+                ], dtype=np.float32)
+
+                # Rotar todos los vértices del modelo
+                for i in range(len(self.obj_model.vertices)):
+                    self.obj_model.vertices[i] = rot_180_y @ np.array(self.obj_model.vertices[i])
+
+    def verify_alignment_quality(self, landmarks_3d):
+        """
+        Verifica qué tan bien están alineados los puntos después de la transformación
+        """
+        errors = {}
+
+        for name in self.ANCHOR_VERTEX_IDS.keys():
+            if name in landmarks_3d:
+                vertex_id = self.ANCHOR_VERTEX_IDS[name]
+                if vertex_id < len(self.obj_model.vertices):
+                    # Punto del modelo
+                    model_point = np.array(self.obj_model.vertices[vertex_id])
+
+                    # Aplicar transformación actual
+                    transformed_point = self.model_scale * self.model_rotation @ model_point + self.model_translation
+
+                    # Punto objetivo
+                    target_point = np.array(landmarks_3d[name])
+
+                    # Calcular error
+                    error = np.linalg.norm(transformed_point - target_point)
+                    errors[name] = error
+
+        if errors:
+            avg_error = np.mean(list(errors.values()))
+            max_error = max(errors.values())
+
+            print(f"📏 Error de alineación:")
+            for name, error in errors.items():
+                print(f"   {name}: {error:.4f}")
+            print(f"   Promedio: {avg_error:.4f}, Máximo: {max_error:.4f}")
+
+            return avg_error
+        return 0.0
+    
+
+    def cleanup(self):
+        """Limpia recursos OpenGL y GLFW"""
+        print("🧹 Limpiando recursos OpenGL...")
+        
+        # Limpiar recursos OpenGL
+        if hasattr(self, 'vao'):
+            glDeleteVertexArrays(1, [self.vao])
+        if hasattr(self, 'vbo'):
+            glDeleteBuffers(1, [self.vbo])
+        if hasattr(self, 'shader_program'):
+            glDeleteProgram(self.shader_program)
+        if hasattr(self, 'fbo'):
+            glDeleteFramebuffers(1, [self.fbo])
+        if hasattr(self, 'color_tex'):
+            glDeleteTextures(1, [self.color_tex])
+        if hasattr(self, 'depth_rbo'):
+            glDeleteRenderbuffers(1, [self.depth_rbo])
+        
+        # Destruir ventana GLFW
+        if hasattr(self, 'window') and self.window:
+            glfw.destroy_window(self.window)
+        
+        # Terminar GLFW
+        glfw.terminate()
+        print("✅ Recursos limpiados correctamente")
