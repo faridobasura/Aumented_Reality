@@ -68,26 +68,6 @@ def render_shirt_adaptive(model_renderer, torso_width, torso_height, angle, rend
     model_renderer.set_viewport(torso_width, torso_height)
     model_renderer.set_render_mode(render_mode)
 
-    # Si tenemos landmarks, alinear automáticamente
-    if landmarks_3d is not None and use_auto_alignment:
-        print(f"🔍 Alineando modelo con {len(landmarks_3d)} landmarks...")
-        
-        # Usar un factor de escala fijo para pruebas
-        scale_factor = 2.5  # <-- Ajusta este valor según necesites
-        
-        rotation, scale, translation = model_renderer.align_model_with_landmarks(
-            landmarks_3d, 
-            scale_multiplier=scale_factor  # Usar escala fija
-        )
-        
-        if rotation is not None:
-            # Aplicar transformación
-            model_renderer.set_model_transform(translation, rotation, scale)
-            
-            # Verificar alineación
-            avg_error = model_renderer.verify_alignment_quality(landmarks_3d)
-            logger.warning(f"GRADO DE ERROR: {avg_error}")
-
     raw_frame = model_renderer.render_to_image()
     if raw_frame is None:
         return None
@@ -95,47 +75,6 @@ def render_shirt_adaptive(model_renderer, torso_width, torso_height, angle, rend
     rgba = twoD_Render.opengl_to_transparent_rgba(raw_frame)
     return rgba
 
-def correct_coordinate_system(translation, rotation_mat):
-    """
-    Corrección mejorada con inversión de giro
-    """
-    # 1. Invertir Y (arriba/abajo)
-    translation_corrected = translation.copy()
-    translation_corrected[1] = -translation[1]
-    
-    # 2. Invertir eje X para corregir giro contrario
-    # Cuando el usuario gira a la derecha, la rotación debe ser positiva en Y
-    # Si está invertido, invertimos el eje X
-    flip_x = np.array([
-        [-1, 0, 0],
-        [ 0, 1, 0],
-        [ 0, 0, 1]
-    ])
-    
-    rotation_corrected = rotation_mat @ flip_x
-    
-    # 3. DEBUG: Mostrar ángulos de Euler para verificar
-    # Convertir matriz de rotación a ángulos de Euler
-    sy = np.sqrt(rotation_corrected[0,0] * rotation_corrected[0,0] + 
-                 rotation_corrected[1,0] * rotation_corrected[1,0])
-    
-    singular = sy < 1e-6
-    
-    if not singular:
-        x = np.arctan2(rotation_corrected[2,1], rotation_corrected[2,2])
-        y = np.arctan2(-rotation_corrected[2,0], sy)
-        z = np.arctan2(rotation_corrected[1,0], rotation_corrected[0,0])
-    else:
-        x = np.arctan2(-rotation_corrected[1,2], rotation_corrected[1,1])
-        y = np.arctan2(-rotation_corrected[2,0], sy)
-        z = 0
-    
-    print(f"🎯 Ángulos de Euler después de corrección: "
-          f"X={np.degrees(x):.1f}°, Y={np.degrees(y):.1f}°, Z={np.degrees(z):.1f}°")
-    
-    return translation_corrected, rotation_corrected
-
-            
 def mediaPipeRender():
     args = parse_arguments()
 
@@ -170,12 +109,44 @@ def mediaPipeRender():
             try:
                 obj_loaded = ObjModel.load_obj(obj_path)
                 if obj_loaded is not None:
+                    if obj_loaded:
+                        print(f"📐 Rango de coordenadas del modelo:")
+                        vertices_array = np.array(obj_loaded.vertices)
+                        print(f"  X: [{vertices_array[:, 0].min():.3f}, {vertices_array[:, 0].max():.3f}]")
+                        print(f"  Y: [{vertices_array[:, 1].min():.3f}, {vertices_array[:, 1].max():.3f}]")
+                        print(f"  Z: [{vertices_array[:, 2].min():.3f}, {vertices_array[:, 2].max():.3f}]")
+                        print(f"  Centro: {vertices_array.mean(axis=0)}")
                     # Calcular tamaño de render basado en el tamaño del frame de la cámara
                     render_width = max(512, min(FRAME_W, 1024))  # Entre 512 y 1024
                     render_height = max(512, min(FRAME_H, 1024))
 
                     model_renderer = ModelRenderer(width=render_width, height=render_height, obj=obj_loaded)
                     model_renderer.set_render_mode(args.render_mode)
+
+                    if model_renderer is not None:
+                        # Test de orientación simple
+                        print("\n🧪 TEST DE ORIENTACIÓN BÁSICA")
+                        
+                        # Aplicar transformación de prueba
+                        test_translation = np.array([0.0, 0.0, 0.0])
+                        test_rotation = np.eye(3)  # Rotación identidad
+                        test_scale = 1.0
+                        
+                        model_renderer.set_model_transform(test_translation, test_rotation, test_scale)
+                        
+                        # Renderizar una imagen
+                        test_img = model_renderer.render_to_image()
+                        
+                        if test_img is not None:
+                            # Mostrar estadísticas de la imagen
+                            print(f"  Imagen de test: {test_img.shape}")
+                            print(f"  Valor medio de píxeles: {np.mean(test_img):.2f}")
+                            
+                            # Verificar si hay algo visible (no todo negro)
+                            if np.mean(test_img) > 10:
+                                print("  ✅ Modelo visible en renderizado")
+                            else:
+                                print("  ⚠️  Modelo NO visible (posiblemente fuera de vista)")
 
                     print(f"✅ Modelo 3D cargado. Tamaño de render: {render_width}x{render_height}")
                 else:
@@ -271,45 +242,29 @@ def mediaPipeRender():
 
                                 # Crear diccionario de landmarks 3D
                                 landmarks_3d = {
-                                    "left_shoulder": [pl[SHOULDER_LEFT].x, pl[SHOULDER_LEFT].y, pl[SHOULDER_LEFT].z],
-                                    "right_shoulder": [pl[SHOULDER_RIGHT].x, pl[SHOULDER_RIGHT].y, pl[SHOULDER_RIGHT].z],
-                                    "left_hip": [pl[HIP_LEFT].x, pl[HIP_LEFT].y, pl[HIP_LEFT].z],
-                                    "right_hip": [pl[HIP_RIGHT].x, pl[HIP_RIGHT].y, pl[HIP_RIGHT].z]
+                                    "left_shoulder": [pl[SHOULDER_LEFT].x, pl[SHOULDER_LEFT].y, pl[SHOULDER_LEFT].z],  # SIN -y
+                                    "right_shoulder": [pl[SHOULDER_RIGHT].x, pl[SHOULDER_RIGHT].y, pl[SHOULDER_RIGHT].z],  # SIN -y
+                                    "left_hip": [pl[HIP_LEFT].x, pl[HIP_LEFT].y, pl[HIP_LEFT].z],  # SIN -y
+                                    "right_hip": [pl[HIP_RIGHT].x, pl[HIP_RIGHT].y, pl[HIP_RIGHT].z]  # SIN -y
                                 }
 
-                                # Opción A: Usar alineación automática con Procrustes
-                                rotation, scale, translation = model_renderer.align_model_with_landmarks(landmarks_3d)
-
-                                # Opción B: Si la alineación automática no funciona, usar tu método actual
-                                # pero con la escala calculada para que coincidan los hombros
-                                if scale <= 0:  # Si la alineación falló
-                                    pL = np.array(landmarks_3d["left_shoulder"])
-                                    pR = np.array(landmarks_3d["right_shoulder"])
-                                    pH_left = np.array(landmarks_3d["left_hip"])
-                                    pH_right = np.array(landmarks_3d["right_hip"])
-                                    pH = (pH_left + pH_right) / 2.0
-
-                                    translation, rotation_mat, detected_width = compute_torso_frame(pL, pR, pH)
-                                    translation, rotation_mat = correct_coordinate_system(translation, rotation_mat)
-
-                                    # Calcular escala basada en distancia de hombros
-                                    if model_renderer.model_shoulder_dist > 0:
-                                        scale = detected_width / model_renderer.model_shoulder_dist
-                                        # Ya no multiplicamos por 2.5, usamos la escala exacta
-                                        # scale *= 1.0  # Sin ajuste adicional
-                                    else:
-                                        scale = 1.0
-
-                                # Renderizar con la transformación calculada
-                                img_3d = render_shirt_adaptive(
-                                    model_renderer,
-                                    torso_width,
-                                    torso_height,
-                                    angle,
-                                    args.render_mode,
-                                    landmarks_3d=landmarks_3d,  # Pasar los landmarks
-                                    use_auto_alignment=True     # Activar alineación automática
-                                )
+                                rotation, scale, translation = model_renderer.align_model_with_landmarks(
+                                landmarks_3d, 
+                                scale_multiplier=2.5  # Ajusta este valor según necesites
+                            )
+                            
+                            # NO aplicar set_model_transform aquí - ya se aplicó en align_model_with_landmarks
+                            
+                            # Renderizar con la transformación calculada
+                            img_3d = render_shirt_adaptive(
+                                model_renderer,
+                                torso_width,
+                                torso_height,
+                                angle,
+                                args.render_mode,
+                                landmarks_3d=landmarks_3d,
+                                use_auto_alignment=True
+                            )
 
                             if img_3d is not None:
                                 frame = twoD_Render.overlay_transparent(frame, img_3d, x, y)
