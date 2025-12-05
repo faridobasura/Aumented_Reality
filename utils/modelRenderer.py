@@ -8,7 +8,7 @@ import ctypes
 import sys
 
 Y_OFFSET = -0.3 
-X_OFFSET = -0.05  
+X_OFFSET = -0.1  
 class ModelRenderer:
     """Clase corregida - solo los métodos que cambian"""
     
@@ -170,7 +170,7 @@ class ModelRenderer:
         distance = np.linalg.norm(right - left)
     
         # Si la distancia es muy pequeña, escalar el modelo
-        SCALE_FACTOR = 2.0  # Aumentar este valor para hacer el modelo más grande
+        SCALE_FACTOR = 1.5  # Aumentar este valor para hacer el modelo más grande
         if distance < 0.3:  # Si es menor a 30cm en espacio 3D
             distance *= SCALE_FACTOR
             print(f"⚠️  Modelo muy pequeño, escalando por {SCALE_FACTOR}")
@@ -348,7 +348,7 @@ class ModelRenderer:
         self.view_matrix[2, 3] = -3.0  # Cámara en Z = -3.0
 
         # 6. PROYECCIÓN
-        fov = 45.0  # Reducido de 60° a 45° para menos distorsión
+        fov = 50.0  # Reducido de 60° a 45° para menos distorsión
         aspect = self.width / max(self.height, 1)
         near = 0.1
         far = 100.0
@@ -593,7 +593,7 @@ class ModelRenderer:
             scale_base = target_shoulder_dist / model_shoulder_dist
             
             # Factor de ajuste empírico (ajusta según tu modelo)
-            SCALE_ADJUSTMENT = 1.8  # ✅ Cambia este valor entre 1.0 y 3.0
+            SCALE_ADJUSTMENT = 1.38  # ✅ Cambia este valor entre 1.0 y 3.0
             scale = scale_base * SCALE_ADJUSTMENT
             
             print(f"\n📊 ESCALA CALCULADA:")

@@ -212,12 +212,12 @@ def mediaPipeRender():
                     torso_width = int(math.sqrt(
                         (right_shoulder_x - left_shoulder_x) ** 2 +
                         (right_shoulder_y - left_shoulder_y) ** 2
-                    ) * 1.5)
+                    ) * 1.7)
 
                     torso_height = int(math.sqrt(
                         (left_hip_x - left_shoulder_x) ** 2 +
                         (left_hip_y - left_shoulder_y) ** 2
-                    ) * 1.4)
+                    ) * 1.5)
 
                     torso_center_x = int((left_shoulder_x + right_shoulder_x + left_hip_x) / 3)
                     torso_center_y = int((left_shoulder_y + right_shoulder_y + left_hip_y) / 3)
