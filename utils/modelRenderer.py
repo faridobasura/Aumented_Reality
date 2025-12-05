@@ -7,6 +7,8 @@ import os
 import ctypes
 import sys
 
+from utils.textureRenderer import TextureRenderer
+
 Y_OFFSET = -0.3 
 X_OFFSET = -0.1  
 class ModelRenderer:
@@ -41,12 +43,18 @@ class ModelRenderer:
         else:
             self.model_shoulder_dist = 0.0
             self.model_anchor_offset = np.zeros(3)
+
         
-        # Inicializar OpenGL
+        self.texture_renderer = TextureRenderer()
+        
+        # Cargar texturas por defecto
+        
         self._init_opengl()
         self._compile_shaders()
         self._init_gl_objects()
         self._upload_mesh()
+        self._load_default_textures()
+
     
     def _load_shader_file(self, filepath):
         """Carga un shader desde archivo"""
@@ -150,6 +158,23 @@ class ModelRenderer:
         print(f"✅ Contexto OpenGL creado (ventana oculta)")
         print(f"   OpenGL version: {glGetString(GL_VERSION).decode()}")
         print(f"   GLSL version: {glGetString(GL_SHADING_LANGUAGE_VERSION).decode()}")
+
+    def _load_default_textures(self):
+        """Carga texturas iniciales"""
+        # Textura blanca por defecto
+        self.texture_renderer.create_solid_color_texture(
+            "white", (255, 255, 255)
+        )
+        
+        # Textura de debug UV
+        self.texture_renderer.create_checkerboard_texture(
+            "debug_uv",
+            color1=(255, 100, 100),
+            color2=(100, 100, 255)
+        )
+        
+        # Activar textura blanca por defecto
+        self.texture_renderer.set_active_texture("white")
     
     def _calculate_shoulder_distance(self):
         """Calcula distancia entre hombros"""
@@ -374,6 +399,7 @@ class ModelRenderer:
         self.width = w
         self.height = h
         self._init_gl_objects()
+        
     
     def _draw_model(self):
         """Dibuja el modelo con shaders"""
@@ -386,14 +412,24 @@ class ModelRenderer:
 
         glBindVertexArray(self.vao)
 
+        if self.render_mode == "textured":
+            self.texture_renderer.bind_active_texture()
+        else:
+            self.texture_renderer.unbind_texture()
+
+        glBindVertexArray(self.vao)
+
         # Configurar modo de renderizado
         if self.render_mode == "wireframe":
             glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
-            glLineWidth(1.0)
         else:
             glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
 
         glDrawArrays(GL_TRIANGLES, 0, self.vertex_count)
+
+        # ✅ AGREGAR: Desvincular textura
+        self.texture_renderer.unbind_texture()
+
         glBindVertexArray(0)
         glUseProgram(0)
     
@@ -593,7 +629,7 @@ class ModelRenderer:
             scale_base = target_shoulder_dist / model_shoulder_dist
             
             # Factor de ajuste empírico (ajusta según tu modelo)
-            SCALE_ADJUSTMENT = 1.38  # ✅ Cambia este valor entre 1.0 y 3.0
+            SCALE_ADJUSTMENT = 1.55  # ✅ Cambia este valor entre 1.0 y 3.0
             scale = scale_base * SCALE_ADJUSTMENT
             
             print(f"\n📊 ESCALA CALCULADA:")
@@ -693,7 +729,11 @@ class ModelRenderer:
     def cleanup(self):
         """Limpia recursos OpenGL y GLFW"""
         print("🧹 Limpiando recursos OpenGL...")
-        
+
+    
+        if hasattr(self, 'texture_renderer'):
+            self.texture_renderer.cleanup()
+
         # Limpiar recursos OpenGL
         if hasattr(self, 'vao'):
             glDeleteVertexArrays(1, [self.vao])

@@ -28,8 +28,8 @@ HIP_RIGHT = 24
 
 
 # Rutas de archivos
-shirt_path = os.path.expanduser('~/AR_python/Aumented_Reality/Black_T_Shirt_PNG_Clip_Art-3107.png')
-obj_path = os.path.expanduser('~/AR_python/Aumented_Reality/t_shirt_model/t_shirt.obj')
+shirt_path = os.path.expanduser('~/AR_python/Aumented_Reality/models/Black_T_Shirt_PNG_Clip_Art-3107.png')
+obj_path = os.path.expanduser('~/AR_python/Aumented_Reality/models/obj/t_shirt.obj')
 
 logger = logging.getLogger(__name__)
 
@@ -232,6 +232,33 @@ def mediaPipeRender():
 
                     if visible_shoulders and visible_hips:
                         if args.use_3d and model_renderer:
+
+                            textures_dir = os.path.expanduser(
+                                '~/AR_python/Aumented_Reality/model/textures/'
+                            )
+
+                            # Asegurar que existe el directorio
+                            os.makedirs(textures_dir, exist_ok=True)
+
+                            # Cargar diferentes diseños
+                            model_renderer.texture_renderer.load_texture(
+                                "shirt_black", 
+                                f"{textures_dir}black_solid.png"
+                            )
+                            model_renderer.texture_renderer.load_texture(
+                                "shirt_white",
+                                f"{textures_dir}white_solid.png"
+                            )
+                            #model_renderer.texture_renderer.load_texture(
+                            #    "shirt_pattern",
+                            #    f"{textures_dir}pattern_shirt.png"
+                            #)
+
+                            # Activar textura inicial
+                            model_renderer.texture_renderer.set_active_texture("shirt_black")
+
+                            print("✅ Texturas cargadas exitosamente")
+
                             if getattr(results, "pose_world_landmarks", None):
                                 pl = results.pose_world_landmarks.landmark
 
@@ -319,22 +346,39 @@ def mediaPipeRender():
 
                 if key == 27:  # ESC
                     break
-                
-                elif key == ord('3'):  
-                    args.use_3d = True
-                    print("🔄 Cambiado a modo 3D")
 
-                elif key == ord('2'):  
-                    args.use_3d = False
-                    print("🔄 Cambiado a modo 2D")
+                elif key == ord('1'):
+                    model_renderer.texture_renderer.set_active_texture("shirt_black")
+                    print("🎨 Textura: Playera negra")
 
-                elif key == ord('w'):
-                    args.render_mode = "wireframe"
-                    print("🔄 Cambiado a modo WIRE FRAME")
+                elif key == ord('2'):
+                    model_renderer.texture_renderer.set_active_texture("shirt_white")
+                    print("🎨 Textura: Playera blanca")
+
+                elif key == ord('3'):
+                    model_renderer.texture_renderer.set_active_texture("shirt_pattern")
+                    print("🎨 Textura: Playera con patrón")
+
+                elif key == ord('d'):
+                    model_renderer.texture_renderer.set_active_texture("debug_uv")
+                    print("🎨 Textura: Debug UV")
 
                 elif key == ord('t'):
                     args.render_mode = "textured"
-                    print("🖼 Cambiado a modo TEXTURED")
+                    print("🖼️ Modo: TEXTURED")
+
+                elif key == ord('w'):
+                    args.render_mode = "wireframe"
+                    print("📐 Modo: WIREFRAME")
+                
+                elif key == ord('v'):  
+                    args.use_3d = True
+                    print("🔄 Cambiado a modo 3D")
+
+                elif key == ord('u'):  
+                    args.use_3d = False
+                    print("🔄 Cambiado a modo 2D")
+
     except KeyboardInterrupt:
         print("\n🛑 Interrupción por teclado")
     finally:
