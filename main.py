@@ -248,10 +248,13 @@ def mediaPipeRender():
                                     "right_hip": [pl[HIP_RIGHT].x, pl[HIP_RIGHT].y, pl[HIP_RIGHT].z]  # SIN -y
                                 }
 
+                                torso_size_pixels = max(torso_width, torso_height)
+                                scale_factor = torso_size_pixels / 500.0  # Ajusta 500 según tu modelo
+                                
                                 rotation, scale, translation = model_renderer.align_model_with_landmarks(
-                                landmarks_3d, 
-                                scale_multiplier=2.5  # Ajusta este valor según necesites
-                            )
+                                    landmarks_3d, 
+                                    scale_multiplier=scale_factor  # Usar factor dinámico
+                                )
                             
                             # NO aplicar set_model_transform aquí - ya se aplicó en align_model_with_landmarks
                             

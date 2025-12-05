@@ -219,12 +219,15 @@ class ModelRenderer:
         self.model_rotation = np.array(rotation_mat, dtype=np.float32)
         self.model_scale = float(scale)
 
-        # Debug: verificar formas
-        print(f"🎯 set_model_transform:")
-        print(f"   Translation shape: {self.model_translation.shape}")
-        print(f"   Rotation shape: {self.model_rotation.shape}")
+        # Debug detallado
+        print(f"\n🎯 set_model_transform DEBUG:")
+        print(f"   Translation: {self.model_translation}")
+        print(f"   Translation magnitude: {np.linalg.norm(self.model_translation):.4f}")
         print(f"   Scale: {self.model_scale}")
-    
+        print(f"   Rotation matrix:")
+        for i in range(3):
+            print(f"     [{rotation_mat[i,0]:.3f}, {rotation_mat[i,1]:.3f}, {rotation_mat[i,2]:.3f}]")
+
     def set_render_mode(self, mode):
         self.render_mode = mode
     
@@ -660,37 +663,55 @@ class ModelRenderer:
 
         # 9. **CALCULAR ESCALA CON AJUSTE DE TAMAÑO**
         if model_shoulder_dist > 0 and target_shoulder_dist > 0:
-            # Calcular factor basado en la relación de distancias
-            distance_ratio = target_shoulder_dist / model_shoulder_dist
+            # CALCULAR ESCALA DIRECTAMENTE de la relación de distancias
+            scale = target_shoulder_dist / model_shoulder_dist
 
-            # FACTOR DE AJUSTE - Incrementar para que ocupe más espacio
-            # Si el modelo está muy pequeño, prueba con valores más altos (5.0-8.0)
-            ADJUSTMENT_FACTOR = 6.0  # <-- Aumenta este valor si sigue pequeño
+            # Aplicar factor de ajuste EMPÍRICO
+            # Este factor depende de tu modelo específico
+            SCALE_ADJUSTMENT = 2.0  # <-- AJUSTA ESTE VALOR
 
-            if scale_multiplier is None:
-                scale_multiplier = distance_ratio * ADJUSTMENT_FACTOR
+            scale *= SCALE_ADJUSTMENT
 
-            print(f"📐 Relación de distancia: {distance_ratio:.4f}")
-            print(f"🎯 Multiplicador calculado: {scale_multiplier:.4f}")
+            print(f"\n📐 ESCALA CALCULADA:")
+            print(f"   Relación distancias: {target_shoulder_dist/model_shoulder_dist:.4f}")
+            print(f"   Factor ajuste: {SCALE_ADJUSTMENT}")
+            print(f"   Escala final: {scale:.4f}")
+
+            # Si se proporciona scale_multiplier, usarlo adicionalmente
+            if scale_multiplier is not None:
+                scale *= scale_multiplier
+                print(f"   Multiplicador externo: {scale_multiplier:.4f}")
+                print(f"   Escala final ajustada: {scale:.4f}")
         else:
-            if scale_multiplier is None:
-                scale_multiplier = 4.0  # Valor por defecto más grande
-            print(f"⚠️  Usando multiplicador por defecto: {scale_multiplier}")
-
-        # 10. ESCALA FINAL
-        scale = scale_base * scale_multiplier
-
-        # 11. Verificar que la escala sea razonable
-        if scale > 8.0:
-            print(f"⚠️  Escala muy grande ({scale:.2f}), limitando a 8.0")
-            scale = 8.0
-        elif scale < 0.5:
-            print(f"⚠️  Escala muy pequeña ({scale:.2f}), aumentando a 1.0")
+            # Fallback
             scale = 1.0
+            if scale_multiplier is not None:
+                scale *= scale_multiplier
 
+            print(f"⚠️  Usando escala por defecto: {scale:.4f}")
+
+        # 7. IGNORAR scale_base de Procrustes - NO USARLO
+        # Procrustes está dando valores incorrectos para tu caso
+
+        print(f"\n📊 ESCALA FINAL (SIN Procrustes): {scale:.4f}")
         # 12. Calcular traslación
-        translation = target_centroid - scale * (rotation @ model_centroid)
+        # FORMA CORRECTA: 
+        translation = target_centroid - rotation @ (scale * model_centroid)
+        #translation = target_centroid - scale * (rotation @ model_centroid)
 
+        print(f"   Traslación ANtes de Offset: {translation}")
+
+        
+        # Después de calcular translation, ajusta con offset:
+
+        # 13. AJUSTAR CON OFFSET DEL TORSO
+        # Estos valores son empíricos - ajústalos según tu modelo
+        TORSO_OFFSET = np.array([0.0, 0.15, 0.1], dtype=np.float32)  # [X, Y, Z]
+        #translation = translation + TORSO_OFFSET
+
+        print(f"\n📍 AJUSTE DE OFFSET:")
+        print(f"   Offset aplicado: {TORSO_OFFSET}")
+        print(f"   Nueva traslación: {translation}")
         # 13. Aplicar transformación
         self.model_rotation = rotation
         self.model_scale = scale
