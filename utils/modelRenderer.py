@@ -7,8 +7,13 @@ import os
 import ctypes
 import sys
 
+Y_OFFSET = -0.3 
+X_OFFSET = -0.05  
 class ModelRenderer:
+    """Clase corregida - solo los métodos que cambian"""
+    
     def __init__(self, width=512, height=512, obj=None):
+        """Constructor corregido"""
         self.width = width
         self.height = height
         self.obj_model = obj
@@ -27,19 +32,12 @@ class ModelRenderer:
         self.model_scale = 1.0
         self.render_mode = "wireframe"
         
-        # Calcular propiedades
         if obj:
-            # Verificar orientación del modelo
-            self.check_model_orientation()
-
+            
             self.model_shoulder_dist = self._calculate_shoulder_distance()
             self.model_anchor_offset = self._calculate_anchor_offset()
-
-            # DEBUG: Imprimir información de vértices ancla
             self.debug_draw_anchor_vertices()
-
             print(f"✅ Modelo cargado: {len(obj.vertices)} vértices")
-            print(f"✅ Distancia entre hombros: {self.model_shoulder_dist:.4f}")
         else:
             self.model_shoulder_dist = 0.0
             self.model_anchor_offset = np.zeros(3)
@@ -327,47 +325,34 @@ class ModelRenderer:
         return np.array(tri_verts, dtype=np.float32).reshape(-1, 3)
 
     def _apply_transform(self):
-        """Transformación FINAL corregida - Cámara simple mirando hacia -Z"""
         if self.model_translation.ndim > 1:
             self.model_translation = self.model_translation.flatten()
 
-        print(f"\n=== DEBUG _apply_transform ===")
-
         # 1. ESCALA
-        scale_mat = np.eye(4)
+        scale_mat = np.eye(4, dtype=np.float32)
         scale_mat[:3, :3] *= self.model_scale
 
-        # 2. ROTACIÓN (viene de MediaPipe, ya corregida)
-        rot_mat = np.eye(4)
+        # 2. ROTACIÓN
+        rot_mat = np.eye(4, dtype=np.float32)
         rot_mat[:3, :3] = self.model_rotation
 
         # 3. TRASLACIÓN
-        trans_mat = np.eye(4)
-        trans_mat[:3, 3] = self.model_translation.reshape(3)
+        trans_mat = np.eye(4, dtype=np.float32)
+        trans_mat[:3, 3] = self.model_translation
 
-        # 4. ORDEN: Traslación * Rotación * Escala
+        # Orden correcto T * R * S
         self.model_matrix = trans_mat @ rot_mat @ scale_mat
 
-        # 5. VISTA - CORREGIDA: Cámara simple mirando hacia -Z (estándar OpenGL)
-        # NO aplicar rotación extra a la cámara
-        self.view_matrix = np.eye(4)
-        self.view_matrix[2, 3] = -5.0  # Cámara en Z = -3.0, mirando hacia -Z (origen)
+        # Vista simple - cámara mirando hacia -Z
+        self.view_matrix = np.eye(4, dtype=np.float32)
+        self.view_matrix[2, 3] = -3.0  # Cámara en Z = -3.0
 
         # 6. PROYECCIÓN
-        fov = 60.0
+        fov = 45.0  # Reducido de 60° a 45° para menos distorsión
         aspect = self.width / max(self.height, 1)
         near = 0.1
         far = 100.0
         self.proj_matrix = self._perspective_projection(fov, aspect, near, far)
-
-        print(f"Traslación: {self.model_translation}")
-        print(f"Escala: {self.model_scale}")
-
-        # DEBUG: Calcular posición final de un vértice
-        test_vertex = np.array([0, 0, 0, 1])  # Origen
-        final_pos = self.proj_matrix @ self.view_matrix @ self.model_matrix @ test_vertex
-        print(f"Posición del origen en clip space: {final_pos}")
-        print("================================\n")
 
     def _perspective_projection(self, fov, aspect, near, far):
         """Crea matriz de proyección en perspectiva"""
@@ -528,202 +513,125 @@ class ModelRenderer:
     def align_model_with_landmarks(self, landmarks_3d, scale_multiplier=None):
         """
         Alinea el modelo para que sus vértices ancla coincidan con landmarks 3D
-        CON CORRECCIÓN DE COORDENADAS
         """
         if self.obj_model is None:
             print("❌ No hay modelo cargado")
             return None, None, None
 
-        # 1. Convertir landmarks de MediaPipe a nuestro sistema de coordenadas
-        # MediaPipe: Y abajo -> Nuestro sistema: Y arriba
         corrected_landmarks = {}
         print("\n🎯 CONVERSIÓN COORDENADAS MEDIAPIPE -> OPENGL:")
 
         for name, point in landmarks_3d.items():
             corrected_point = np.array(point, dtype=np.float32)
-
-            # CRÍTICO: Invertir Y para que sea hacia arriba
+            
+            # ✅ Invertir Y (MediaPipe usa Y hacia abajo, OpenGL hacia arriba)
             corrected_point[1] = -corrected_point[1]
-
-            # CRÍTICO: Invertir Z para que sea compatible con cámara OpenGL
-            # OpenGL mira hacia -Z, así que invertimos para que el modelo sea visible
+            
+            # ✅ Invertir Z (para que el modelo mire hacia la cámara)
             corrected_point[2] = -corrected_point[2]
-
+            
             corrected_landmarks[name] = corrected_point
             print(f"   {name}: {point} -> {corrected_point}")
 
-        # 2. Continuar con el proceso de alineación usando los landmarks corregidos
+        # Preparar arrays de puntos
         model_points = []
         target_points = []
-
-        # Variables para cálculos de hombros
-        model_left_shoulder = None
-        model_right_shoulder = None
-        target_left_shoulder = None
-        target_right_shoulder = None
-    
+        
         for name in self.ANCHOR_VERTEX_IDS.keys():
             if name in corrected_landmarks:
                 vertex_id = self.ANCHOR_VERTEX_IDS[name]
                 if vertex_id < len(self.obj_model.vertices):
-                    # Punto del modelo
-                    model_point = np.array(self.obj_model.vertices[vertex_id])
-                    model_points.append(model_point)
-    
-                    # Punto objetivo (landmark)
-                    target_point = np.array(corrected_landmarks[name])
-                    target_points.append(target_point)
-                    
-                    # Guardar puntos de hombros para cálculo de distancia
-                    if name == "left_shoulder":
-                        model_left_shoulder = model_point
-                        target_left_shoulder = target_point
-                    elif name == "right_shoulder":
-                        model_right_shoulder = model_point
-                        target_right_shoulder = target_point
-    
+                    model_points.append(np.array(self.obj_model.vertices[vertex_id]))
+                    target_points.append(corrected_landmarks[name])
+        
         if len(model_points) < 2:
             print("❌ No hay suficientes puntos para alinear")
             return None, None, None
-    
-        # Convertir a arrays numpy con forma (N, 3)
-        model_points_arr = np.array(model_points)  # (N, 3)
-        target_points_arr = np.array(target_points)  # (N, 3)
-    
+        
+        model_points_arr = np.array(model_points)
+        target_points_arr = np.array(target_points)
+        
         print(f"✅ Alineando {len(model_points_arr)} puntos")
-        print(f"   Forma model_points: {model_points_arr.shape}")
-        print(f"   Forma target_points: {target_points_arr.shape}")
-    
-        # 2. Calcular centroides
-        model_centroid = np.mean(model_points_arr, axis=0)  # (3,)
-        target_centroid = np.mean(target_points_arr, axis=0)  # (3,)
-    
-        # 3. Centrar puntos
-        model_centered = model_points_arr - model_centroid  # (N, 3)
-        target_centered = target_points_arr - target_centroid  # (N, 3)
-    
-        # 4. Transponer para tener forma (3, N) para Procrustes
-        model_centered_T = model_centered.T  # (3, N)
-        target_centered_T = target_centered.T  # (3, N)
-    
-        # 5. Calcular rotación óptima (Procrustes)
-        H = model_centered_T @ target_centered_T.T  # (3, N) @ (N, 3) = (3, 3)
+
+        # Calcular centroides
+        model_centroid = np.mean(model_points_arr, axis=0)
+        target_centroid = np.mean(target_points_arr, axis=0)
+        
+        # Centrar puntos
+        model_centered = model_points_arr - model_centroid
+        target_centered = target_points_arr - target_centroid
+        
+        # Rotación óptima usando SVD (Procrustes)
+        H = model_centered.T @ target_centered
         U, S, Vt = np.linalg.svd(H)
         rotation = Vt.T @ U.T
-
-        # Asegurar que es una rotación propia (det=1)
-        # Asegurar que es una rotación propia (det=1)
+        
+        # Asegurar rotación propia (det=1)
         if np.linalg.det(rotation) < 0:
             Vt[-1, :] *= -1
             rotation = Vt.T @ U.T
-
-        # 6.2 Segundo: Rotar 180° en Y para que mire hacia adelante (no hacia atrás)
+        
+        # Aplicar rotación 180° en Y SOLO UNA VEZ
         rot_180_y = np.array([
             [-1.0, 0.0,  0.0],
             [ 0.0, 1.0,  0.0],
             [ 0.0, 0.0, -1.0]
         ], dtype=np.float32)
-
-        # 6.3 Combinar ambas correcciones: Primero X, luego Y
-        rotation_corrected = rot_180_y @ rotation
-
-        print(f"\n🎯 ROTACIÓN CORREGIDA (180° Y):")
+        
+        rotation = rotation
+        
+        print(f"\n🎯 ROTACIÓN CORREGIDA:")
         for i in range(3):
-            print(f"   [{rotation_corrected[i,0]:.3f}, {rotation_corrected[i,1]:.3f}, {rotation_corrected[i,2]:.3f}]")
+            print(f"   [{rotation[i,0]:.3f}, {rotation[i,1]:.3f}, {rotation[i,2]:.3f}]")
 
-        rotation = rotation_corrected
-
-         # 7. **CALCULAR DISTANCIAS DESPUÉS DE LA ROTACIÓN**
-        # Esto es importante porque la rotación afecta las posiciones relativas
-        if model_left_shoulder is not None and model_right_shoulder is not None:
-            # Calcular hombros rotados
-            left_shoulder_rotated = rotation @ model_left_shoulder
-            right_shoulder_rotated = rotation @ model_right_shoulder
-            model_shoulder_dist = np.linalg.norm(right_shoulder_rotated - left_shoulder_rotated)
-        else:
-            model_shoulder_dist = self._calculate_average_distance(model_points_arr)
-
-        if target_left_shoulder is not None and target_right_shoulder is not None:
-            target_shoulder_dist = np.linalg.norm(target_right_shoulder - target_left_shoulder)
-        else:
-            target_shoulder_dist = self._calculate_average_distance(target_points_arr)
-
-        print(f"\n📏 DISTANCIAS DESPUÉS DE ROTACIÓN:")
-        print(f"   Modelo (rotado): {model_shoulder_dist:.4f}")
-        print(f"   Landmarks: {target_shoulder_dist:.4f}")
-    
-        # 8. Calcular escala base usando Procrustes
-        model_norm = np.trace(model_centered_T @ model_centered_T.T)
-        if model_norm > 0:
-            scale_base = np.trace(target_centered_T.T @ rotation @ model_centered_T) / model_norm
-        else:
-            scale_base = 1.0
-
-        print(f"\n📊 ESCALA PROCRUSTES: {scale_base:.4f}")
-
-        # 9. **CALCULAR ESCALA CON AJUSTE DE TAMAÑO**
+        # Calcular escala 
+        # Basada en distancia de hombros (más precisa)
+        model_shoulder_dist = np.linalg.norm(model_points[1] - model_points[0])
+        target_shoulder_dist = np.linalg.norm(target_points[1] - target_points[0])
+        
         if model_shoulder_dist > 0 and target_shoulder_dist > 0:
-            # CALCULAR ESCALA DIRECTAMENTE de la relación de distancias
-            scale = target_shoulder_dist / model_shoulder_dist
-
-            # Aplicar factor de ajuste EMPÍRICO
-            # Este factor depende de tu modelo específico
-            SCALE_ADJUSTMENT = 2.0  # <-- AJUSTA ESTE VALOR
-
-            scale *= SCALE_ADJUSTMENT
-
-            print(f"\n📐 ESCALA CALCULADA:")
-            print(f"   Relación distancias: {target_shoulder_dist/model_shoulder_dist:.4f}")
+            scale_base = target_shoulder_dist / model_shoulder_dist
+            
+            # Factor de ajuste empírico (ajusta según tu modelo)
+            SCALE_ADJUSTMENT = 1.8  # ✅ Cambia este valor entre 1.0 y 3.0
+            scale = scale_base * SCALE_ADJUSTMENT
+            
+            print(f"\n📊 ESCALA CALCULADA:")
+            print(f"   Distancia modelo: {model_shoulder_dist:.4f}")
+            print(f"   Distancia target: {target_shoulder_dist:.4f}")
+            print(f"   Escala base: {scale_base:.4f}")
             print(f"   Factor ajuste: {SCALE_ADJUSTMENT}")
             print(f"   Escala final: {scale:.4f}")
-
-            # Si se proporciona scale_multiplier, usarlo adicionalmente
+            
+            # Aplicar multiplicador externo si existe
             if scale_multiplier is not None:
                 scale *= scale_multiplier
-                print(f"   Multiplicador externo: {scale_multiplier:.4f}")
-                print(f"   Escala final ajustada: {scale:.4f}")
+                print(f"   Con multiplicador: {scale:.4f}")
         else:
-            # Fallback
             scale = 1.0
             if scale_multiplier is not None:
                 scale *= scale_multiplier
-
-            print(f"⚠️  Usando escala por defecto: {scale:.4f}")
-
-        # 7. IGNORAR scale_base de Procrustes - NO USARLO
-        # Procrustes está dando valores incorrectos para tu caso
-
-        print(f"\n📊 ESCALA FINAL (SIN Procrustes): {scale:.4f}")
-        # 12. Calcular traslación
-        # FORMA CORRECTA: 
-        translation = target_centroid - rotation @ (scale * model_centroid)
-        #translation = target_centroid - scale * (rotation @ model_centroid)
-
-        print(f"   Traslación ANtes de Offset: {translation}")
-
         
-        # Después de calcular translation, ajusta con offset:
+        # Traslación 
+        # T = T_target - s * (R * T_model)
+        translation = target_centroid - scale * (rotation @ model_centroid)
 
-        # 13. AJUSTAR CON OFFSET DEL TORSO
-        # Estos valores son empíricos - ajústalos según tu modelo
-        TORSO_OFFSET = np.array([0.0, 0.15, 0.1], dtype=np.float32)  # [X, Y, Z]
-        #translation = translation + TORSO_OFFSET
-
-        print(f"\n📍 AJUSTE DE OFFSET:")
-        print(f"   Offset aplicado: {TORSO_OFFSET}")
-        print(f"   Nueva traslación: {translation}")
-        # 13. Aplicar transformación
+        translation[0] += X_OFFSET
+        translation[1] += Y_OFFSET
+        
+        print(f"\n📍 TRASLACIÓN:")
+        print(f"   Target centroid: {target_centroid}")
+        print(f"   Model centroid (rotado y escalado): {scale * (rotation @ model_centroid)}")
+        print(f"   Traslación final: {translation}")
+        
+        # Aplicar transformación
         self.model_rotation = rotation
         self.model_scale = scale
         self.model_translation = translation
-
-        print(f"\n✅ TRANSFORMACIÓN FINAL:")
-        print(f"   Escala: {scale:.4f} (base: {scale_base:.4f} * mult: {scale_multiplier:.4f})")
-        print(f"   Traslación: {translation}")
-
-        # 14. Verificar alineación con los landmarks CORREGIDOS
+        
+        # Verificar calidad de alineación
         avg_error = self.verify_alignment_quality(corrected_landmarks)
-
+        
         return rotation, scale, translation
     
     def _calculate_average_distance(self, points):
@@ -739,46 +647,9 @@ class ModelRenderer:
                 distances.append(dist)
         
         return np.mean(distances) if distances else 0.0
-
-    def check_model_orientation(self):
-        """Solo corregir hombros invertidos - NO aplicar rotación fija"""
-        if self.obj_model is None:
-            return
-
-        print("🔄 Verificando orientación del modelo...")
-
-        # Solo verificar si los hombros están invertidos
-        ls_idx = self.ANCHOR_VERTEX_IDS["left_shoulder"]
-        rs_idx = self.ANCHOR_VERTEX_IDS["right_shoulder"]
-
-        if ls_idx < len(self.obj_model.vertices) and rs_idx < len(self.obj_model.vertices):
-            left_shoulder = np.array(self.obj_model.vertices[ls_idx])
-            right_shoulder = np.array(self.obj_model.vertices[rs_idx])
-
-            # Verificar si los hombros están invertidos
-            if left_shoulder[0] > right_shoulder[0]:
-                print("⚠️  Modelo tiene hombros invertidos, aplicando rotación de 180° en Y")
-                rot_180_y = np.array([
-                    [-1.0, 0.0,  0.0],
-                    [ 0.0, 1.0,  0.0],
-                    [ 0.0, 0.0, -1.0]
-                ], dtype=np.float32)
-
-                for i in range(len(self.obj_model.vertices)):
-                    self.obj_model.vertices[i] = rot_180_y @ np.array(self.obj_model.vertices[i])
-
-            # Debug después de la corrección
-            left_after = np.array(self.obj_model.vertices[ls_idx])
-            right_after = np.array(self.obj_model.vertices[rs_idx])
-            print(f"✅ Después de corrección:")
-            print(f"   Izquierda: X={left_after[0]:.3f}, Z={left_after[2]:.3f}")
-            print(f"   Derecha: X={right_after[0]:.3f}, Z={right_after[2]:.3f}")
-
+    
     def verify_alignment_quality(self, landmarks_3d_corrected):
-        """
-        Verifica qué tan bien están alineados los puntos después de la transformación
-        Usa landmarks ya corregidos (Y invertido, Z invertido)
-        """
+        """Verificación de calidad de alineación"""
         errors = {}
 
         for name in self.ANCHOR_VERTEX_IDS.keys():
@@ -788,10 +659,10 @@ class ModelRenderer:
                     # Punto del modelo
                     model_point = np.array(self.obj_model.vertices[vertex_id])
 
-                    # Aplicar transformación actual
-                    transformed_point = self.model_scale * self.model_rotation @ model_point + self.model_translation
+                    # Aplicar transformación CORRECTA: s * R * p + T
+                    transformed_point = self.model_scale * (self.model_rotation @ model_point) + self.model_translation
 
-                    # Punto objetivo (YA CORREGIDO)
+                    # Punto objetivo
                     target_point = np.array(landmarks_3d_corrected[name])
 
                     # Calcular error
@@ -802,10 +673,18 @@ class ModelRenderer:
             avg_error = np.mean(list(errors.values()))
             max_error = max(errors.values())
 
-            print(f"\n📏 ERROR DE ALINEACIÓN (usando landmarks corregidos):")
+            print(f"\n🔍 ERROR DE ALINEACIÓN:")
             for name, error in errors.items():
-                print(f"   {name}: {error:.4f}")
+                status = "✅" if error < 0.05 else "⚠️" if error < 0.1 else "❌"
+                print(f"   {status} {name}: {error:.4f}")
             print(f"   Promedio: {avg_error:.4f}, Máximo: {max_error:.4f}")
+            
+            if avg_error < 0.05:
+                print("   🎉 ¡Alineación EXCELENTE!")
+            elif avg_error < 0.1:
+                print("   👍 Alineación BUENA")
+            else:
+                print("   ⚠️ Alineación necesita mejora - ajusta SCALE_ADJUSTMENT")
 
             return avg_error
         return 0.0

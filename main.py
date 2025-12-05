@@ -212,7 +212,7 @@ def mediaPipeRender():
                     torso_width = int(math.sqrt(
                         (right_shoulder_x - left_shoulder_x) ** 2 +
                         (right_shoulder_y - left_shoulder_y) ** 2
-                    ) * 1.2)
+                    ) * 1.5)
 
                     torso_height = int(math.sqrt(
                         (left_hip_x - left_shoulder_x) ** 2 +
@@ -230,47 +230,49 @@ def mediaPipeRender():
                         right_shoulder_x - left_shoulder_x
                     )) + 180
 
-                    # ---- Si los dos hombros y ambas caderas son visibles procedemos ----
                     if visible_shoulders and visible_hips:
-
-                        # después de calcular visible_shoulders and visible_hips
-                        # En la sección donde procesas los landmarks 3D:
                         if args.use_3d and model_renderer:
-                            # get 3D points
                             if getattr(results, "pose_world_landmarks", None):
                                 pl = results.pose_world_landmarks.landmark
 
-                                # Crear diccionario de landmarks 3D
                                 landmarks_3d = {
-                                    "left_shoulder": [pl[SHOULDER_LEFT].x, pl[SHOULDER_LEFT].y, pl[SHOULDER_LEFT].z],  # SIN -y
-                                    "right_shoulder": [pl[SHOULDER_RIGHT].x, pl[SHOULDER_RIGHT].y, pl[SHOULDER_RIGHT].z],  # SIN -y
-                                    "left_hip": [pl[HIP_LEFT].x, pl[HIP_LEFT].y, pl[HIP_LEFT].z],  # SIN -y
-                                    "right_hip": [pl[HIP_RIGHT].x, pl[HIP_RIGHT].y, pl[HIP_RIGHT].z]  # SIN -y
+                                    "left_shoulder": [pl[SHOULDER_LEFT].x, 
+                                                     pl[SHOULDER_LEFT].y,  
+                                                     pl[SHOULDER_LEFT].z],
+                                    "right_shoulder": [pl[SHOULDER_RIGHT].x, 
+                                                      pl[SHOULDER_RIGHT].y,  
+                                                      pl[SHOULDER_RIGHT].z],
+                                    "left_hip": [pl[HIP_LEFT].x, 
+                                                pl[HIP_LEFT].y,           
+                                                pl[HIP_LEFT].z],
+                                    "right_hip": [pl[HIP_RIGHT].x, 
+                                                 pl[HIP_RIGHT].y,   
+                                                 pl[HIP_RIGHT].z]
                                 }
 
+                                # ✅ CORRECCIÓN 2: Calcular escala dinámica basada en píxeles
                                 torso_size_pixels = max(torso_width, torso_height)
-                                scale_factor = torso_size_pixels / 500.0  # Ajusta 500 según tu modelo
-                                
+                                # Ajusta este factor según tu modelo específico (prueba valores entre 0.5 y 2.0)
+                                scale_multiplier = torso_size_pixels / 400.0  # ✅ Cambiado de 500 a 400
+
                                 rotation, scale, translation = model_renderer.align_model_with_landmarks(
                                     landmarks_3d, 
-                                    scale_multiplier=scale_factor  # Usar factor dinámico
+                                    scale_multiplier=scale_multiplier
                                 )
-                            
-                            # NO aplicar set_model_transform aquí - ya se aplicó en align_model_with_landmarks
-                            
-                            # Renderizar con la transformación calculada
-                            img_3d = render_shirt_adaptive(
-                                model_renderer,
-                                torso_width,
-                                torso_height,
-                                angle,
-                                args.render_mode,
-                                landmarks_3d=landmarks_3d,
-                                use_auto_alignment=True
-                            )
 
-                            if img_3d is not None:
-                                frame = twoD_Render.overlay_transparent(frame, img_3d, x, y)
+                                # Renderizar con la transformación calculada
+                                img_3d = render_shirt_adaptive(
+                                    model_renderer,
+                                    torso_width,
+                                    torso_height,
+                                    angle,
+                                    args.render_mode,
+                                    landmarks_3d=landmarks_3d,
+                                    use_auto_alignment=True
+                                )
+
+                                if img_3d is not None:
+                                    frame = twoD_Render.overlay_transparent(frame, img_3d, x, y)
 
                         else:
                             # ---- Modo 2D (cache) ----
