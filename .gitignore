@@ -7,9 +7,15 @@ venv.bak/
 
 # Archivos de Python
 __pycache__/
+
+
+# O mejor aún (más completo):
+**/__pycache__/
+
 *.py[cod]
 *$py.class
 *.so
+*.pyc
 .Python
 build/
 develop-eggs/
