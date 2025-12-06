@@ -20,14 +20,7 @@ class ModelRenderer:
         self.height = height
         self.obj_model = obj
         self.vertex_count = 0
-        
-        self.ANCHOR_VERTEX_IDS = {
-            "right_shoulder": 2557,
-            "left_shoulder": 2854,
-            "right_hip": 2511,
-            "left_hip": 3275,
-        }
-        
+
         # Transformaciones
         self.model_translation = np.zeros(3, dtype=np.float32)
         self.model_rotation = np.eye(3, dtype=np.float32)
@@ -35,7 +28,7 @@ class ModelRenderer:
         self.render_mode = "wireframe"
         
         if obj:
-            
+            self.detect_anchor_vertices()
             self.model_shoulder_dist = self._calculate_shoulder_distance()
             self.model_anchor_offset = self._calculate_anchor_offset()
             self.debug_draw_anchor_vertices()
@@ -824,6 +817,121 @@ class ModelRenderer:
             return rotation
 
         return np.eye(3)  # Matriz identidad si falla
+    
+    def swap_model(self, obj_or_path):
+        """
+        Reemplaza el modelo actual por uno nuevo. `obj_or_path` puede ser:
+          - una instancia de ObjModel ya cargada
+          - o una ruta a un archivo .obj (string)
+        Libera los buffers antiguos y sube la nueva malla.
+        """
+        # Cargar ObjModel si nos dieron una ruta
+        if isinstance(obj_or_path, str):
+            try:
+                from utils.objectLoader import ObjModel
+                new_obj = ObjModel.load_obj(obj_or_path)
+            except Exception as e:
+                print(f"❌ Error cargando OBJ desde ruta '{obj_or_path}': {e}")
+                return False
+        else:
+            new_obj = obj_or_path
+
+        if new_obj is None:
+            print("❌ swap_model: objeto nulo")
+            return False
+
+        # Liberar buffers de la malla anterior (si existen)
+        try:
+            if hasattr(self, 'vao'):
+                glDeleteVertexArrays(1, [self.vao])
+                delattr = False
+                del self.vao
+        except Exception:
+            pass
+
+        try:
+            if hasattr(self, 'vbo'):
+                glDeleteBuffers(1, [self.vbo])
+                del self.vbo
+        except Exception:
+            pass
+
+        # Asignar nuevo objeto
+        self.obj_model = new_obj
+        self.detect_anchor_vertices()
+
+
+        # Recalcular métricas dependientes del modelo
+        self.model_shoulder_dist = self._calculate_shoulder_distance()
+        self.model_anchor_offset = self._calculate_anchor_offset()
+
+        # Subir la nueva malla
+        self._upload_mesh()
+
+        # Redibujar / debug info
+        print(f"🔁 Modelo cambiado: {len(new_obj.vertices)} vértices")
+        self.debug_draw_anchor_vertices()
+
+        return True
+
+
+    def detect_anchor_vertices(self):
+        """
+        Detecta anchors automáticamente buscando hombros y caderas
+        según geometría del modelo.
+        """
+
+        if self.obj_model is None or len(self.obj_model.vertices) == 0:
+            print("❌ No hay modelo cargado para detectar vértices ancla")
+            return
+
+        verts = np.array(self.obj_model.vertices)
+        xs = verts[:, 0]
+        ys = verts[:, 1]
+        zs = verts[:, 2]
+
+        # ---------------------------------------------------------
+        # HOMBROS: tomamos el 5% de vértices más altos (Y grande)
+        # ---------------------------------------------------------
+        top_threshold = np.percentile(ys, 95)
+        top_verts_idx = np.where(ys >= top_threshold)[0]
+
+        if len(top_verts_idx) < 2:
+            print("⚠️ No suficientes vértices altos para hombros, usando máximos absolutos")
+            top_verts_idx = np.argsort(ys)[-10:]  # top 10 altos
+
+        # left shoulder → menor X entre los altos
+        left_shoulder = top_verts_idx[np.argmin(xs[top_verts_idx])]
+
+        # right shoulder → mayor X entre los altos
+        right_shoulder = top_verts_idx[np.argmax(xs[top_verts_idx])]
+
+        # ---------------------------------------------------------
+        # CADERAS: tomamos 10% de los vértices más bajos (Y pequeño)
+        # ---------------------------------------------------------
+        low_threshold = np.percentile(ys, 10)
+        low_verts_idx = np.where(ys <= low_threshold)[0]
+
+        if len(low_verts_idx) < 2:
+            print("⚠️ No suficientes vértices bajos para caderas, usando mínimos absolutos")
+            low_verts_idx = np.argsort(ys)[:10]
+
+        left_hip = low_verts_idx[np.argmin(xs[low_verts_idx])]
+        right_hip = low_verts_idx[np.argmax(xs[low_verts_idx])]
+
+        # ---------------------------------------------------------
+        # Actualizamos ANCHOR_VERTEX_IDS dinámicamente
+        # ---------------------------------------------------------
+        self.ANCHOR_VERTEX_IDS = {
+            "left_shoulder": int(left_shoulder),
+            "right_shoulder": int(right_shoulder),
+            "left_hip": int(left_hip),
+            "right_hip": int(right_hip)
+        }
+
+        print("\n🎯 ANCHOR VERTEX DETECTADOS AUTOMÁTICAMENTE:")
+        for k, v in self.ANCHOR_VERTEX_IDS.items():
+            print(f"  {k}: idx {v} → {self.obj_model.vertices[v]}")
 
     
 def debug_print_matrix(name, matrix):
