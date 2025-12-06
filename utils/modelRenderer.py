@@ -79,9 +79,9 @@ class ModelRenderer:
         parent_dir = os.path.dirname(current_dir)
         shader_dir = os.path.join(parent_dir, "shaders")
         
-        # Cargar shaders desde archivos
-        vertex_source = self._load_shader_file(os.path.join(shader_dir, "vertex.glsl"))
-        fragment_source = self._load_shader_file(os.path.join(shader_dir, "fragment.glsl"))
+        # 1. SHADERS PARA TEXTURAS (modelo principal)
+        vertex_source = self._load_shader_file(os.path.join(shader_dir, "texture_vertex.glsl"))
+        fragment_source = self._load_shader_file(os.path.join(shader_dir, "texture_fragment.glsl"))
         
         # Vertex shader
         self.vertex_shader = glCreateShader(GL_VERTEX_SHADER)
@@ -101,7 +101,7 @@ class ModelRenderer:
             error = glGetShaderInfoLog(self.fragment_shader)
             raise RuntimeError(f"Error compilando fragment shader:\n{error}")
         
-        # Programa
+        # Programa principal (para texturas)
         self.shader_program = glCreateProgram()
         glAttachShader(self.shader_program, self.vertex_shader)
         glAttachShader(self.shader_program, self.fragment_shader)
@@ -111,13 +111,66 @@ class ModelRenderer:
             error = glGetProgramInfoLog(self.shader_program)
             raise RuntimeError(f"Error linkando shader program:\n{error}")
         
-        # Obtener ubicaciones de uniformes
+        # Obtener ubicaciones de uniformes para el shader principal
         self.model_loc = glGetUniformLocation(self.shader_program, "model")
         self.view_loc = glGetUniformLocation(self.shader_program, "view")
         self.proj_loc = glGetUniformLocation(self.shader_program, "projection")
         self.use_texture_loc = glGetUniformLocation(self.shader_program, "useTexture")
         
-        print("✅ Shaders compilados con soporte para texturas")
+        print("✅ Shaders principales compilados con soporte para texturas")
+        
+        # 2. SHADERS PARA DEBUG/ANCLAS (si está en modo debug)
+        if args.debug:
+            self._compile_debug_shaders()
+    
+    def _compile_debug_shaders(self):
+        """Compila shaders para debug/anclas"""
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        parent_dir = os.path.dirname(current_dir)
+        shader_dir = os.path.join(parent_dir, "shaders")
+        
+        # Cargar shaders para debug
+        debug_vertex_source = self._load_shader_file(os.path.join(shader_dir, "vertex.glsl"))
+        debug_fragment_source = self._load_shader_file(os.path.join(shader_dir, "fragment.glsl"))
+        
+        # Vertex shader para debug
+        self.debug_vertex_shader = glCreateShader(GL_VERTEX_SHADER)
+        glShaderSource(self.debug_vertex_shader, debug_vertex_source)
+        glCompileShader(self.debug_vertex_shader)
+        
+        if not glGetShaderiv(self.debug_vertex_shader, GL_COMPILE_STATUS):
+            error = glGetShaderInfoLog(self.debug_vertex_shader)
+            print(f"⚠️ Error compilando debug vertex shader:\n{error}")
+            self.debug_shader_program = None
+            return
+        
+        # Fragment shader para debug
+        self.debug_fragment_shader = glCreateShader(GL_FRAGMENT_SHADER)
+        glShaderSource(self.debug_fragment_shader, debug_fragment_source)
+        glCompileShader(self.debug_fragment_shader)
+        
+        if not glGetShaderiv(self.debug_fragment_shader, GL_COMPILE_STATUS):
+            error = glGetShaderInfoLog(self.debug_fragment_shader)
+            print(f"⚠️ Error compilando debug fragment shader:\n{error}")
+            self.debug_shader_program = None
+            return
+        
+        # Programa para debug
+        self.debug_shader_program = glCreateProgram()
+        glAttachShader(self.debug_shader_program, self.debug_vertex_shader)
+        glAttachShader(self.debug_shader_program, self.debug_fragment_shader)
+        glLinkProgram(self.debug_shader_program)
+        
+        if not glGetProgramiv(self.debug_shader_program, GL_LINK_STATUS):
+            error = glGetProgramInfoLog(self.debug_shader_program)
+            print(f"⚠️ Error linkando debug shader program:\n{error}")
+            self.debug_shader_program = None
+        else:
+            # Obtener ubicaciones de uniformes para debug
+            self.debug_model_loc = glGetUniformLocation(self.debug_shader_program, "model")
+            self.debug_view_loc = glGetUniformLocation(self.debug_shader_program, "view")
+            self.debug_proj_loc = glGetUniformLocation(self.debug_shader_program, "projection")
+            print("✅ Shaders de debug compilados")
 
     def _init_opengl(self):
         """Inicializa contexto OpenGL con GLFW"""
@@ -532,17 +585,24 @@ class ModelRenderer:
         if self.obj_model is None:
             return
 
+        # Si no hay shader de debug, usar el principal (pero sin texturas)
+        if not hasattr(self, 'debug_shader_program') or self.debug_shader_program is None:
+            print("⚠️ Usando shader principal para debug (sin texturas)")
+            self._draw_anchor_with_main_shader()
+            return
+
         # Asegurar que tenemos matrices válidas
         if not hasattr(self, 'model_matrix') or self.model_matrix is None:
             self._apply_transform()
 
-        # Usar el mismo shader que el modelo principal
-        glUseProgram(self.shader_program)
+        # Usar el shader de debug
+        glUseProgram(self.debug_shader_program)
 
         # Configurar matrices
-        glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, self.model_matrix.T)
-        glUniformMatrix4fv(self.view_loc, 1, GL_FALSE, self.view_matrix.T)
-        glUniformMatrix4fv(self.proj_loc, 1, GL_FALSE, self.proj_matrix.T)
+        glUniformMatrix4fv(self.debug_model_loc, 1, GL_FALSE, self.model_matrix.T)
+        glUniformMatrix4fv(self.debug_view_loc, 1, GL_FALSE, self.view_matrix.T)
+        glUniformMatrix4fv(self.debug_proj_loc, 1, GL_FALSE, self.proj_matrix.T)
+
 
         # Colores para los puntos ancla
         anchor_colors = {
