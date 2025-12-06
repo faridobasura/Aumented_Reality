@@ -6,6 +6,7 @@ import glfw
 import os
 import ctypes
 import sys
+from utils.app_args import args
 
 from utils.textureRenderer import TextureRenderer
 
@@ -20,15 +21,21 @@ class ModelRenderer:
         self.height = height
         self.obj_model = obj
         self.vertex_count = 0
-
         # Transformaciones
         self.model_translation = np.zeros(3, dtype=np.float32)
         self.model_rotation = np.eye(3, dtype=np.float32)
         self.model_scale = 1.0
-        self.render_mode = "wireframe"
+        
+        if obj.has_texture_coordinates():
+            print(f"✅ Modelo tiene coordenadas UV para texturas")
+            self.render_mode = "texture"
+        else:
+            print(f"⚠️ Modelo NO tiene coordenadas UV - usando modo wireframe")
+            self.render_mode = "wireframe"
+
+        self.ANCHOR_VERTEX_IDS = {}  # Inicializar como diccionario vacío
         
         if obj:
-            #self.detect_anchor_vertices()
             self.detect_anchor_vertices_robust()
             self.model_shoulder_dist = self._calculate_shoulder_distance()
             self.model_anchor_offset = self._calculate_anchor_offset()
@@ -58,48 +65,28 @@ class ModelRenderer:
         except FileNotFoundError:
             print(f"❌ Error: No se encontró el shader {filepath}")
             # Fallback a shaders embebidos
-            if "vertex" in filepath:
-                return """#version 330 core
-                    layout(location = 0) in vec3 position;
-                    layout(location = 1) in vec3 color;
-                    out vec3 vertexColor;
-                    uniform mat4 model;
-                    uniform mat4 view;
-                    uniform mat4 projection;
-                    void main() {
-                        gl_Position = projection * view * model * vec4(position, 1.0);
-                        vertexColor = color;
-                    }"""
-            else:
-                return """#version 330 core
-                    in vec3 vertexColor;
-                    out vec4 FragColor;
-                    void main() {
-                        FragColor = vec4(vertexColor, 1.0);
-                    }"""
+
     
     def _compile_shaders(self):
-        """Compila shaders desde archivos externos"""
-        # Determinar ruta base
+        """Compila shaders con soporte para texturas"""
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        parent_dir = os.path.dirname(current_dir)  # ej: /home/usuario
+        parent_dir = os.path.dirname(current_dir)
         shader_dir = os.path.join(parent_dir, "shaders")
         
         # Cargar shaders desde archivos
         vertex_source = self._load_shader_file(os.path.join(shader_dir, "vertex.glsl"))
         fragment_source = self._load_shader_file(os.path.join(shader_dir, "fragment.glsl"))
         
-        # Crear y compilar vertex shader
+        # Vertex shader
         self.vertex_shader = glCreateShader(GL_VERTEX_SHADER)
         glShaderSource(self.vertex_shader, vertex_source)
         glCompileShader(self.vertex_shader)
         
-        # Verificar compilación
         if not glGetShaderiv(self.vertex_shader, GL_COMPILE_STATUS):
             error = glGetShaderInfoLog(self.vertex_shader)
             raise RuntimeError(f"Error compilando vertex shader:\n{error}")
         
-        # Crear y compilar fragment shader
+        # Fragment shader
         self.fragment_shader = glCreateShader(GL_FRAGMENT_SHADER)
         glShaderSource(self.fragment_shader, fragment_source)
         glCompileShader(self.fragment_shader)
@@ -108,7 +95,7 @@ class ModelRenderer:
             error = glGetShaderInfoLog(self.fragment_shader)
             raise RuntimeError(f"Error compilando fragment shader:\n{error}")
         
-        # Crear programa
+        # Programa
         self.shader_program = glCreateProgram()
         glAttachShader(self.shader_program, self.vertex_shader)
         glAttachShader(self.shader_program, self.fragment_shader)
@@ -122,53 +109,44 @@ class ModelRenderer:
         self.model_loc = glGetUniformLocation(self.shader_program, "model")
         self.view_loc = glGetUniformLocation(self.shader_program, "view")
         self.proj_loc = glGetUniformLocation(self.shader_program, "projection")
+        self.use_texture_loc = glGetUniformLocation(self.shader_program, "useTexture")
         
-        print("✅ Shaders compilados exitosamente desde archivos externos")
+        print("✅ Shaders compilados con soporte para texturas")
 
     def _init_opengl(self):
         """Inicializa contexto OpenGL con GLFW"""
         if not glfw.init():
             raise RuntimeError("No se pudo inicializar GLFW")
 
-        # Configurar ventana completamente oculta
         glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
         glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
         glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
         glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
         glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, GL_TRUE)
 
-        # Crear ventana pequeña y oculta
         self.window = glfw.create_window(1, 1, "Hidden Render Context", None, None)
         if not self.window:
             glfw.terminate()
             raise RuntimeError("No se pudo crear ventana GLFW oculta")
 
         glfw.make_context_current(self.window)
-
-        # Ocultar completamente la ventana
         glfw.hide_window(self.window)
 
-        # Verificar que esté oculta
-        print(f"✅ Contexto OpenGL creado (ventana oculta)")
-        print(f"   OpenGL version: {glGetString(GL_VERSION).decode()}")
-        print(f"   GLSL version: {glGetString(GL_SHADING_LANGUAGE_VERSION).decode()}")
+        print(f"✅ Contexto OpenGL creado")
 
     def _load_default_textures(self):
         """Carga texturas iniciales"""
-        # Textura blanca por defecto
-        self.texture_renderer.create_solid_color_texture(
-            "white", (255, 255, 255)
-        )
-        
-        # Textura de debug UV
-        self.texture_renderer.create_checkerboard_texture(
-            "debug_uv",
-            color1=(255, 100, 100),
-            color2=(100, 100, 255)
-        )
-        
-        # Activar textura blanca por defecto
-        self.texture_renderer.set_active_texture("white")
+
+        # Cargar textura de camiseta si existe
+        texture_path = os.path.expanduser('~/AR_python/Aumented_Reality/models/textures/white_solid.png')
+        if os.path.exists(texture_path):
+            if self.texture_renderer.load_texture("t_shirt", texture_path):
+                print(f"✅ Textura de camiseta cargada: {texture_path}")
+                self.texture_renderer.set_active_texture("t_shirt")
+            else:
+                print(f"⚠️ No se pudo cargar textura: {texture_path}")
+        else:
+            print(f"⚠️ No se encontró textura en: {texture_path}")
     
     def _calculate_shoulder_distance(self):
         """Calcula distancia entre hombros"""
@@ -245,8 +223,29 @@ class ModelRenderer:
         for i in range(3):
             print(f"     [{rotation_mat[i,0]:.3f}, {rotation_mat[i,1]:.3f}, {rotation_mat[i,2]:.3f}]")
 
+    def load_texture(self, name, filepath):
+        """Carga una textura desde archivo"""
+        success = self.texture_renderer.load_texture(name, filepath)
+        if success:
+            print(f"✅ Textura '{name}' cargada desde {filepath}")
+        return success
+    
+    def set_texture(self, texture_name):
+        """Establece la textura activa"""
+        success = self.texture_renderer.set_active_texture(texture_name)
+        if success and self.render_mode != "textured":
+            self.set_render_mode("textured")
+        return success
+    
     def set_render_mode(self, mode):
-        self.render_mode = mode
+        """Cambia el modo de renderizado"""
+        valid_modes = ["wireframe", "textured", "solid"]
+        if mode in valid_modes:
+            self.render_mode = mode
+            print(f"🎨 Modo de renderizado cambiado a: {mode}")
+        else:
+            print(f"❌ Modo inválido: {mode}. Usando 'wireframe'")
+            self.render_mode = "wireframe"
     
     def _init_gl_objects(self):
         """Inicializa buffers OpenGL"""
@@ -276,52 +275,99 @@ class ModelRenderer:
         glBindFramebuffer(GL_FRAMEBUFFER, 0)
     
     def _upload_mesh(self):
-        """Sube malla a GPU con posiciones y colores"""
+        """Sube malla a GPU con posiciones y coordenadas UV"""
         if self.obj_model is None:
             return
 
-        # Expandir caras para obtener posiciones
-        positions = self._expand_faces()
+        # Expandir caras para obtener posiciones y UVs
+        if self.obj_model.has_texture_coordinates():
+            positions, tex_coords = self._expand_faces_with_uvs()
+        else:
+            positions = self._expand_faces()
+            tex_coords = np.zeros((len(positions), 2), dtype=np.float32)  # UVs por defecto
+        
         self.vertex_count = len(positions)
-
-        # Generar colores para cada vértice
-        # Por ejemplo: todos grises para el modelo
-        colors = np.full((self.vertex_count, 3), 0.7, dtype=np.float32)  # Gris
-
-        # Intercalar posiciones y colores en un solo array
-        # Formato: [x, y, z, r, g, b, x, y, z, r, g, b, ...]
-        interleaved = np.zeros((self.vertex_count, 6), dtype=np.float32)
+        
+        # Intercalar posiciones y coordenadas UV
+        # Formato: [x, y, z, u, v]
+        interleaved = np.zeros((self.vertex_count, 5), dtype=np.float32)
         interleaved[:, 0:3] = positions  # Posiciones (x, y, z)
-        interleaved[:, 3:6] = colors      # Colores (r, g, b)
-
+        interleaved[:, 3:5] = tex_coords  # Coordenadas UV (u, v)
+        
         # Aplanar el array
         vertex_data = interleaved.flatten()
-
+        
         # VAO/VBO
         self.vao = glGenVertexArrays(1)
         glBindVertexArray(self.vao)
-
+        
         self.vbo = glGenBuffers(1)
         glBindBuffer(GL_ARRAY_BUFFER, self.vbo)
         glBufferData(GL_ARRAY_BUFFER, vertex_data.nbytes, vertex_data, GL_STATIC_DRAW)
-
-        # STRIDE = 6 floats * 4 bytes cada uno = 24 bytes
-        stride = 6 * 4  # 6 floats (3 posición + 3 color) * 4 bytes
-
+        
+        # STRIDE = 5 floats * 4 bytes cada uno = 20 bytes
+        stride = 5 * 4
+        
         # Atributo 0: posición (3 floats)
         glEnableVertexAttribArray(0)
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, None)
-
-        # Atributo 1: color (3 floats) - offset 12 bytes (3 floats * 4 bytes)
+        
+        # Atributo 1: coordenadas UV (2 floats) - offset 12 bytes
         glEnableVertexAttribArray(1)
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(12))
-
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(12))
+        
         glBindVertexArray(0)
-
+        
         print(f"✅ Malla subida a GPU: {self.vertex_count} vértices")
+        if self.obj_model.has_texture_coordinates():
+            print(f"   Incluye coordenadas UV para texturas")
+
+    def _expand_faces_with_uvs(self):
+        """Convierte caras a triángulos con coordenadas UV"""
+        tri_verts = []
+        tri_uvs = []
+        
+        for face, face_uv in zip(self.obj_model.faces, self.obj_model.face_uvs):
+            if len(face) == 3:
+                # Triángulo simple
+                for i in range(3):
+                    vertex_idx = face[i]
+                    uv_idx = face_uv[i] if i < len(face_uv) and face_uv[i] >= 0 else 0
+                    
+                    tri_verts.append(self.obj_model.vertices[vertex_idx])
+                    if uv_idx >= 0 and uv_idx < len(self.obj_model.uvs):
+                        tri_uvs.append(self.obj_model.uvs[uv_idx])
+                    else:
+                        tri_uvs.append([0.0, 0.0])
+            
+            elif len(face) == 4:
+                # Cuadrilátero - dividir en 2 triángulos
+                # Triángulo 1: v0, v1, v2
+                for i in [0, 1, 2]:
+                    vertex_idx = face[i]
+                    uv_idx = face_uv[i] if i < len(face_uv) and face_uv[i] >= 0 else 0
+                    
+                    tri_verts.append(self.obj_model.vertices[vertex_idx])
+                    if uv_idx >= 0 and uv_idx < len(self.obj_model.uvs):
+                        tri_uvs.append(self.obj_model.uvs[uv_idx])
+                    else:
+                        tri_uvs.append([0.0, 0.0])
+                
+                # Triángulo 2: v0, v2, v3
+                for i in [0, 2, 3]:
+                    vertex_idx = face[i]
+                    uv_idx = face_uv[i] if i < len(face_uv) and face_uv[i] >= 0 else 0
+                    
+                    tri_verts.append(self.obj_model.vertices[vertex_idx])
+                    if uv_idx >= 0 and uv_idx < len(self.obj_model.uvs):
+                        tri_uvs.append(self.obj_model.uvs[uv_idx])
+                    else:
+                        tri_uvs.append([0.0, 0.0])
+        
+        return np.array(tri_verts, dtype=np.float32), np.array(tri_uvs, dtype=np.float32)
     
     def _expand_faces(self):
-        """Convierte caras a triángulos - devuelve array 2D"""
+        """Convierte caras a triángulos (sin UVs)"""
         tri_verts = []
         for face in self.obj_model.faces:
             if len(face) == 3:
@@ -340,7 +386,6 @@ class ModelRenderer:
                     self.obj_model.vertices[face[3]]
                 ])
         
-        # Convertir a array numpy 2D
         return np.array(tri_verts, dtype=np.float32).reshape(-1, 3)
 
     def _apply_transform(self):
@@ -396,35 +441,42 @@ class ModelRenderer:
         
     
     def _draw_model(self):
-        """Dibuja el modelo con shaders"""
+        """Dibuja el modelo con shaders y texturas"""
         glUseProgram(self.shader_program)
-
+        
         # Pasar matrices a shaders
-        glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, self.model_matrix.T)
-        glUniformMatrix4fv(self.view_loc, 1, GL_FALSE, self.view_matrix.T)
-        glUniformMatrix4fv(self.proj_loc, 1, GL_FALSE, self.proj_matrix.T)
-
-        glBindVertexArray(self.vao)
-
-        if self.render_mode == "textured":
+        if hasattr(self, 'model_matrix'):
+            glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, self.model_matrix.T)
+            glUniformMatrix4fv(self.view_loc, 1, GL_FALSE, self.view_matrix.T)
+            glUniformMatrix4fv(self.proj_loc, 1, GL_FALSE, self.proj_matrix.T)
+        
+        # Configurar si usar textura
+        use_texture = (self.render_mode == "textured" and 
+                      self.obj_model.has_texture_coordinates())
+        glUniform1i(self.use_texture_loc, 1 if use_texture else 0)
+        
+        # Vincular textura si es necesario
+        if use_texture:
             self.texture_renderer.bind_active_texture()
+            glUniform1i(glGetUniformLocation(self.shader_program, "textureSampler"), 0)
         else:
             self.texture_renderer.unbind_texture()
-
+        
         glBindVertexArray(self.vao)
-
+        
         # Configurar modo de renderizado
         if self.render_mode == "wireframe":
             glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
+            glLineWidth(1.0)
         else:
             glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
-
+        
         glDrawArrays(GL_TRIANGLES, 0, self.vertex_count)
-
-        # ✅ AGREGAR: Desvincular textura
-        self.texture_renderer.unbind_texture()
-
+        
+        # Limpiar
         glBindVertexArray(0)
+        if use_texture:
+            self.texture_renderer.unbind_texture()
         glUseProgram(0)
     
     def render_to_image(self):
@@ -453,6 +505,7 @@ class ModelRenderer:
         self._draw_model()
         
         # 5. Dibujar vértices ancla para debug
+        #if args.debug:
         self.draw_anchor_vertices_with_labels()
         
         # 6. Leer píxeles

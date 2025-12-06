@@ -1,25 +1,19 @@
 import os
 import math
 import logging
-import argparse
-import pygame
 import numpy as np
-import glfw 
 
 # 3rd party
 import cv2
 import mediapipe as mp
-from mediapipe import solutions
-from mediapipe.tasks import python
-from mediapipe.tasks.python import vision
-from mediapipe.framework.formats import landmark_pb2
 
 # Importar el cargador de objetos 3D
 from utils.objectLoader import ObjModel
 from utils import twoD_Render
 from utils.modelRenderer import ModelRenderer
-from utils.modelUtils import compute_torso_frame
 
+
+from utils.app_args import args
 
 SHOULDER_LEFT = 11
 SHOULDER_RIGHT = 12
@@ -49,24 +43,92 @@ FRAME_H = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
 cv2.namedWindow("Detección de Pose", cv2.WINDOW_NORMAL)
 
-def parse_arguments():
-    parser = argparse.ArgumentParser(description='Superposición de prenda con detección de pose')
-    parser.add_argument('--debug', '-d', action='store_true', help='Activar modo debug')
-    parser.add_argument('--use-3d', action='store_true', help='Usar modelo 3D')
 
-    parser.add_argument('--render-mode',
-            type=str,
-            default='wireframe',
-            choices=['textured', 'wireframe'],
-            help='Modo de renderizado 3D'
-        )
-
-    return parser.parse_args()
-
-def render_shirt_adaptive(model_renderer, torso_width, torso_height, angle, render_mode, 
-                         landmarks_3d=None, use_auto_alignment=True):
+def load_textures(model_renderer, textures_dir):
     """
-    Renderiza la camisa con alineación automática a landmarks
+    Carga texturas SOLO desde archivos (no crea texturas por defecto)
+    
+    Returns:
+        list: Nombres de texturas cargadas exitosamente
+    """
+    textures_loaded = []
+    
+    print(f"\n🎨 Cargando texturas desde archivos...")
+    print(f"   Directorio: {textures_dir}")
+    
+    # SOLO las texturas de archivo que quieres
+    texture_files = [
+        ("shirt_black", "black_solid.png"),
+        ("shirt_white", "white_solid.png"),
+       # ("shirt_blue", "blue_solid.jpg"),
+        ("shirt_red", "red_solid.png"),
+    ]
+    
+    files_found = 0
+    
+    for tex_name, filename in texture_files:
+        filepath = os.path.join(textures_dir, filename)
+        
+        if os.path.exists(filepath):
+            if model_renderer.texture_renderer.load_texture(tex_name, filepath):
+                textures_loaded.append(tex_name)
+                files_found += 1
+            else:
+                print(f"   ❌ Error cargando: {filename}")
+        else:
+            print(f"   ⚠️  Archivo no encontrado: {filename}")
+    
+    print(f"\n📊 Total de texturas cargadas: {files_found}")
+    
+    return textures_loaded
+
+def list_available_textures(textures_dir):
+    """
+    Lista las texturas disponibles en el directorio especificado.
+    """
+    print("\n📋 TEXTURAS DISPONIBLES (desde archivos):")
+    print("=" * 60)
+    
+    texture_files = [
+        ("shirt_black", "black_solid.png", "Playera negra sólida"),
+        ("shirt_white", "white_solid.png", "Playera blanca sólida"),
+       # ("shirt_blue", "blue_solid.png", "Playera azul sólida"),
+        ("shirt_red", "red_solid.png", "Playera roja sólida"),
+    ]
+    
+    available_files = []
+    unavailable_files = []
+    
+    for tex_name, filename, description in texture_files:
+        filepath = os.path.join(textures_dir, filename)
+        
+        if os.path.exists(filepath):
+            available_files.append((tex_name, filename, description))
+        else:
+            unavailable_files.append((tex_name, filename, description))
+    
+    if available_files:
+        print("\n  ✅ DISPONIBLES:")
+        for tex_name, filename, description in available_files:
+            print(f"    • {tex_name:15} - {description}")
+            print(f"        Archivo: {filename}")
+    
+    if unavailable_files:
+        print(f"\n  ⚠️  NO DISPONIBLES (archivos faltantes):")
+        for tex_name, filename, description in unavailable_files:
+            print(f"    • {tex_name:15} - {description}")
+            print(f"        Archivo faltante: {filename}")
+    
+    print("\n🎮 USO:")
+    print("  Para usar una textura: python main.py --texture NOMBRE")
+    print("  Ejemplo: python main.py --texture shirt_black")
+    print("=" * 60)
+    
+    return available_files
+
+def render_shirt_adaptive(model_renderer, torso_width, torso_height, render_mode):
+    """
+    Renderiza la camisa con la transformación actual
     """
     if model_renderer is None:
         return None
@@ -82,13 +144,17 @@ def render_shirt_adaptive(model_renderer, torso_width, torso_height, angle, rend
     return rgba
 
 def mediaPipeRender():
-    args = parse_arguments()
+    
+    # Si se solicita listar texturas, hacerlo y salir
+    if args.list_textures:
+        list_available_textures(args.textures_dir)
+        return
 
-    current_model_index = 0
-
-
+    # Configurar cámara
     DESIRED_WIDTH = 1280
     DESIRED_HEIGHT = 720
+    current_model_index = 0
+
     
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, DESIRED_WIDTH)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, DESIRED_HEIGHT)
@@ -99,65 +165,126 @@ def mediaPipeRender():
         return
 
     FRAME_H, FRAME_W = frame.shape[:2]
-    
-    # Crear ventana OpenCV grande
+
+
     cv2.namedWindow("Detección de Pose", cv2.WINDOW_NORMAL)
     cv2.resizeWindow("Detección de Pose", FRAME_W, FRAME_H)
 
+    # Cargar modelo 3D
     obj_loaded = None
     model_renderer = None
+    
+    # Cargar imagen 2D para modo de respaldo
+    shirt_png = cv2.imread(png_shirt_path, cv2.IMREAD_UNCHANGED)
+    if shirt_png is None:
+        print(f"⚠️  No se pudo cargar la imagen 2D")
+        shirt_png = None
 
     try:
-        try:
-            logger.warning(f"ENTRAMOS")
-            obj_loaded = ObjModel.load_obj(model_paths[current_model_index])
-            if obj_loaded is not None:
-                logger.warning(f"obj_loaded is not None")
+        print(f"\n📦 Cargando modelo 3D desde: {model_paths[current_model_index]}")
+        obj_loaded = ObjModel.load_obj(model_paths[current_model_index])
+        
+        if obj_loaded is not None:
+            print(f"📐 Rango de coordenadas del modelo:")
+            vertices_array = np.array(obj_loaded.vertices)
+            print(f"  X: [{vertices_array[:, 0].min():.3f}, {vertices_array[:, 0].max():.3f}]")
+            print(f"  Y: [{vertices_array[:, 1].min():.3f}, {vertices_array[:, 1].max():.3f}]")
+            print(f"  Z: [{vertices_array[:, 2].min():.3f}, {vertices_array[:, 2].max():.3f}]")
+            print(f"  Centro: {vertices_array.mean(axis=0)}")
 
-                if obj_loaded:
-                    print(f"📐 Rango de coordenadas del modelo:")
-                    vertices_array = np.array(obj_loaded.vertices)
-                    print(f"  X: [{vertices_array[:, 0].min():.3f}, {vertices_array[:, 0].max():.3f}]")
-                    print(f"  Y: [{vertices_array[:, 1].min():.3f}, {vertices_array[:, 1].max():.3f}]")
-                    print(f"  Z: [{vertices_array[:, 2].min():.3f}, {vertices_array[:, 2].max():.3f}]")
-                    print(f"  Centro: {vertices_array.mean(axis=0)}")
-                # Calcular tamaño de render basado en el tamaño del frame de la cámara
-                render_width = max(512, min(FRAME_W, 1024))  # Entre 512 y 1024
-                render_height = max(512, min(FRAME_H, 1024))
-                model_renderer = ModelRenderer(width=render_width, height=render_height, obj=obj_loaded)
-                model_renderer.set_render_mode(args.render_mode)
-                if model_renderer is not None:
-                    # Test de orientación simple
-                    print("\n🧪 TEST DE ORIENTACIÓN BÁSICA")
+            # Verificar si el modelo tiene coordenadas UV
+            has_uvs = obj_loaded.has_texture_coordinates()
+            print(f"   ✅ Modelo cargado: {len(obj_loaded.vertices)} vértices")
+            print(f"   🎨 Coordenadas UV: {'SÍ' if has_uvs else 'NO'}")
+            
+            if not has_uvs and args.render_mode == "textured":
+                print(f"   ⚠️  Modo 'textured' no disponible sin coordenadas UV")
+                args.render_mode = "wireframe"
+            
+            # Calcular tamaño de render
+            render_width = max(512, min(FRAME_W, 1024))
+            render_height = max(512, min(FRAME_H, 1024))
+            
+            # Crear renderizador
+            model_renderer = ModelRenderer(width=render_width, height=render_height, obj=obj_loaded)
+            model_renderer.set_render_mode(args.render_mode)
+
+            if model_renderer is not None:
+                # Test de orientación simple
+                print("\n🧪 TEST DE ORIENTACIÓN BÁSICA")
+                
+                # Aplicar transformación de prueba
+                test_translation = np.array([0.0, 0.0, 0.0])
+                test_rotation = np.eye(3)  # Rotación identidad
+                test_scale = 1.0
+                
+                model_renderer.set_model_transform(test_translation, test_rotation, test_scale)
+                
+                # Renderizar una imagen
+                test_img = model_renderer.render_to_image()
+                
+                if test_img is not None:
+                    # Mostrar estadísticas de la imagen
+                    print(f"  Imagen de test: {test_img.shape}")
+                    print(f"  Valor medio de píxeles: {np.mean(test_img):.2f}")
                     
-                    # Aplicar transformación de prueba
-                    test_translation = np.array([0.0, 0.0, 0.0])
-                    test_rotation = np.eye(3)  # Rotación identidad
-                    test_scale = 1.0
-                    
-                    model_renderer.set_model_transform(test_translation, test_rotation, test_scale)
-                    
-                    # Renderizar una imagen
-                    test_img = model_renderer.render_to_image()
-                    
-                    if test_img is not None:
-                        # Mostrar estadísticas de la imagen
-                        print(f"  Imagen de test: {test_img.shape}")
-                        print(f"  Valor medio de píxeles: {np.mean(test_img):.2f}")
-                        
-                        # Verificar si hay algo visible (no todo negro)
-                        if np.mean(test_img) > 10:
-                            print("  ✅ Modelo visible en renderizado")
-                        else:
-                            print("  ⚠️  Modelo NO visible (posiblemente fuera de vista)")
+                    # Verificar si hay algo visible (no todo negro)
+                    if np.mean(test_img) > 10:
+                        print("  ✅ Modelo visible en renderizado")
+                    else:
+                        print("  ⚠️  Modelo NO visible (posiblemente fuera de vista)")
                 print(f"✅ Modelo 3D cargado. Tamaño de render: {render_width}x{render_height}")
+
+            
+            # Cargar texturas SOLO desde archivos
+            textures_loaded = load_textures(model_renderer, args.textures_dir)
+            
+            # Verificar si se cargaron texturas
+            if textures_loaded:
+                # Si se especificó una textura, intentar usarla
+                if args.texture and args.texture in textures_loaded:
+                    model_renderer.texture_renderer.set_active_texture(args.texture)
+                    print(f"   🎯 Textura inicial: {args.texture}")
+                else:
+                    # Si no se especificó o no está disponible, usar la primera
+                    if args.texture:
+                        print(f"   ⚠️  Textura '{args.texture}' no encontrada")
+                    first_texture = textures_loaded[0]
+                    model_renderer.texture_renderer.set_active_texture(first_texture)
+                    print(f"   🎯 Textura inicial (primera disponible): {first_texture}")
+                
+                # Mostrar texturas disponibles
+                print(f"\n📋 Texturas cargadas ({len(textures_loaded)}):")
+                for tex in textures_loaded:
+                    active = "*" if tex == model_renderer.texture_renderer.active_texture_name else " "
+                    print(f"   [{active}] {tex}")
             else:
-                print("❌ objectLoader devolvió None para el OBJ.")
-                args.use_3d = False
-        except Exception as e:
-            logger.error(f"Error cargando OBJ: {e}")
+                print(f"   ⚠️  No se cargaron texturas desde archivos")
+                print(f"   ⚠️  Asegúrate de que los archivos existan en: {args.textures_dir}")
+                
+                if args.render_mode == "textured":
+                    print(f"   ⚠️  Cambiando a modo 'wireframe' (sin texturas)")
+                    args.render_mode = "wireframe"
+                    model_renderer.set_render_mode("wireframe")
+        else:
+            print("❌ No se pudo cargar el modelo 3D")
             args.use_3d = False
 
+    except Exception as e:
+        logger.error(f"Error inicializando 3D: {e}")
+        print(f"❌ Error: {e}")
+        args.use_3d = False
+        model_renderer = None
+
+    # Cache para modo 2D
+    cached_shirt = {
+        "image": None,
+        "angle": None,
+        "size": None
+    }
+
+    # Inicializar MediaPipe POSE
+    try:
         with mp_pose.Pose(
             static_image_mode=False,
             model_complexity=1,
@@ -168,6 +295,7 @@ def mediaPipeRender():
 
             prev_time = cv2.getTickCount()
             fps = 0
+            frame_count = 0
 
             while True:
                 ret, frame = cap.read()
@@ -175,7 +303,7 @@ def mediaPipeRender():
                     print("Fin del video o no se pudo leer.")
                     break
 
-                # Calcula tamaño del frame inmediatamente (para usar en coordenadas)
+                frame_count += 1
                 h, w = frame.shape[:2]
 
                 # Calcular FPS
@@ -199,64 +327,43 @@ def mediaPipeRender():
                     visible_shoulders = left_shoulder_visible and right_shoulder_visible
                     visible_hips = left_hip_visible and right_hip_visible
 
-                    # ---- Calcular todas las coordenadas y métricas UNA vez ----
-                    left_shoulder_x = int(landmarks[SHOULDER_LEFT].x * w)
-                    left_shoulder_y = int(landmarks[SHOULDER_LEFT].y * h)
-                    right_shoulder_x = int(landmarks[SHOULDER_RIGHT].x * w)
-                    right_shoulder_y = int(landmarks[SHOULDER_RIGHT].y * h)
-                    left_hip_x = int(landmarks[HIP_LEFT].x * w)
-                    left_hip_y = int(landmarks[HIP_LEFT].y * h)
-
-                    torso_width = int(math.sqrt(
-                        (right_shoulder_x - left_shoulder_x) ** 2 +
-                        (right_shoulder_y - left_shoulder_y) ** 2
-                    ) * 1.7)
-
-                    torso_height = int(math.sqrt(
-                        (left_hip_x - left_shoulder_x) ** 2 +
-                        (left_hip_y - left_shoulder_y) ** 2
-                    ) * 1.5)
-
-                    torso_center_x = int((left_shoulder_x + right_shoulder_x + left_hip_x) / 3)
-                    torso_center_y = int((left_shoulder_y + right_shoulder_y + left_hip_y) / 3)
-
-                    x = torso_center_x - torso_width // 2
-                    y = torso_center_y - torso_height // 2
-
-                    angle = math.degrees(math.atan2(
-                        right_shoulder_y - left_shoulder_y,
-                        right_shoulder_x - left_shoulder_x
-                    )) + 180
-
                     if visible_shoulders and visible_hips:
+                        # Calcular coordenadas del torso
+                        left_shoulder_x = int(landmarks[SHOULDER_LEFT].x * w)
+                        left_shoulder_y = int(landmarks[SHOULDER_LEFT].y * h)
+                        right_shoulder_x = int(landmarks[SHOULDER_RIGHT].x * w)
+                        right_shoulder_y = int(landmarks[SHOULDER_RIGHT].y * h)
+                        left_hip_x = int(landmarks[HIP_LEFT].x * w)
+                        left_hip_y = int(landmarks[HIP_LEFT].y * h)
+
+                        # Calcular dimensiones
+                        torso_width = int(math.sqrt(
+                            (right_shoulder_x - left_shoulder_x) ** 2 +
+                            (right_shoulder_y - left_shoulder_y) ** 2
+                        ) * 1.7)
+
+                        torso_height = int(math.sqrt(
+                            (left_hip_x - left_shoulder_x) ** 2 +
+                            (left_hip_y - left_shoulder_y) ** 2
+                        ) * 1.5)
+
+                        torso_width = max(torso_width, 100)
+                        torso_height = max(torso_height, 150)
+
+                        # Calcular centro
+                        torso_center_x = int((left_shoulder_x + right_shoulder_x + left_hip_x) / 3)
+                        torso_center_y = int((left_shoulder_y + right_shoulder_y + left_hip_y) / 3)
+
+                        x = torso_center_x - torso_width // 2
+                        y = torso_center_y - torso_height // 2
+
+                        angle = math.degrees(math.atan2(
+                            right_shoulder_y - left_shoulder_y,
+                            right_shoulder_x - left_shoulder_x
+                        )) + 180
+
                         if args.use_3d and model_renderer:
-
-                            textures_dir = os.path.expanduser(
-                                '~/AR_python/Aumented_Reality/model/textures/'
-                            )
-
-                            # Asegurar que existe el directorio
-                            os.makedirs(textures_dir, exist_ok=True)
-
-                            # Cargar diferentes diseños
-                            model_renderer.texture_renderer.load_texture(
-                                "shirt_black", 
-                                f"{textures_dir}black_solid.png"
-                            )
-                            model_renderer.texture_renderer.load_texture(
-                                "shirt_white",
-                                f"{textures_dir}white_solid.png"
-                            )
-                            #model_renderer.texture_renderer.load_texture(
-                            #    "shirt_pattern",
-                            #    f"{textures_dir}pattern_shirt.png"
-                            #)
-
-                            # Activar textura inicial
-                            model_renderer.texture_renderer.set_active_texture("shirt_black")
-
-                            print("✅ Texturas cargadas exitosamente")
-
+                            # MODO 3D
                             if getattr(results, "pose_world_landmarks", None):
                                 pl = results.pose_world_landmarks.landmark
 
@@ -275,108 +382,113 @@ def mediaPipeRender():
                                                  pl[HIP_RIGHT].z]
                                 }
 
-                                # ✅ CORRECCIÓN 2: Calcular escala dinámica basada en píxeles
+                                # Calcular escala
                                 torso_size_pixels = max(torso_width, torso_height)
-                                # Ajusta este factor según tu modelo específico (prueba valores entre 0.5 y 2.0)
-                                scale_multiplier = torso_size_pixels / 400.0  # ✅ Cambiado de 500 a 400
+                                scale_multiplier = torso_size_pixels / 400.0
 
+                                # Alinear modelo
                                 rotation, scale, translation = model_renderer.align_model_with_landmarks(
                                     landmarks_3d, 
                                     scale_multiplier=scale_multiplier
                                 )
 
-                                # Renderizar con la transformación calculada
-                                img_3d = render_shirt_adaptive(
-                                    model_renderer,
-                                    torso_width,
-                                    torso_height,
-                                    angle,
-                                    args.render_mode,
-                                    landmarks_3d=landmarks_3d,
-                                    use_auto_alignment=True
-                                )
+                                # Aplicar transformación y renderizar
+                                if rotation is not None and translation is not None:
+                                    model_renderer.set_model_transform(translation, rotation, scale)
+                                    
+                                    img_3d = render_shirt_adaptive(
+                                        model_renderer,
+                                        torso_width,
+                                        torso_height,
+                                        args.render_mode
+                                    )
 
-                                if img_3d is not None:
-                                    frame = twoD_Render.overlay_transparent(frame, img_3d, x, y)
-
+                                    if img_3d is not None:
+                                        frame = twoD_Render.overlay_transparent(frame, img_3d, x, y)
                         else:
-                            # ---- Modo 2D (cache) ----
-                            if not hasattr(mediaPipeRender, "cached_shirt") or \
-                               mediaPipeRender.cached_shirt["angle"] != angle or \
-                               mediaPipeRender.cached_shirt["size"] != (torso_width, torso_height):
-                                resized = cv2.resize(shirt_png, (torso_width, torso_height))
-                                M = cv2.getRotationMatrix2D((torso_width // 2, torso_height // 2), angle, 1.0)
-                                rotated = cv2.warpAffine(resized, M, (torso_width, torso_height),
-                                                       flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_TRANSPARENT)
-                                mediaPipeRender.cached_shirt = {
-                                    "image": rotated,
-                                    "angle": angle,
-                                    "size": (torso_width, torso_height)
-                                }
-                            else:
-                                rotated = mediaPipeRender.cached_shirt["image"]
+                            # MODO 2D
+                            if shirt_png is not None:
+                                # Usar cache para mejor rendimiento
+                                if (cached_shirt["angle"] != angle or 
+                                    cached_shirt["size"] != (torso_width, torso_height)):
+                                    
+                                    resized = cv2.resize(shirt_png, (torso_width, torso_height))
+                                    M = cv2.getRotationMatrix2D((torso_width // 2, torso_height // 2), angle, 1.0)
+                                    rotated = cv2.warpAffine(resized, M, (torso_width, torso_height),
+                                                           flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_TRANSPARENT)
+                                    cached_shirt["image"] = rotated
+                                    cached_shirt["angle"] = angle
+                                    cached_shirt["size"] = (torso_width, torso_height)
+                                else:
+                                    rotated = cached_shirt["image"]
 
-                            frame = twoD_Render.overlay_transparent(frame, rotated, x, y)
+                                frame = twoD_Render.overlay_transparent(frame, rotated, x, y)
 
-                if args.debug and results.pose_landmarks:
-                    mp_drawing.draw_landmarks(
-                       frame,
-                       results.pose_landmarks,
-                       mp_pose.POSE_CONNECTIONS
-                    )
+                    # Dibujar landmarks (modo debug)
+                    if args.debug and results.pose_landmarks:
+                        mp_drawing.draw_landmarks(
+                           frame,
+                           results.pose_landmarks,
+                           mp_pose.POSE_CONNECTIONS,
+                           mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=2, circle_radius=2),
+                           mp_drawing.DrawingSpec(color=(255, 0, 0), thickness=2)
+                        )
 
+                # Mostrar información en pantalla
                 cv2.putText(frame, f"FPS: {fps:.1f}", (10, 30), 
-                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-
-                # ACTUALIZA ESTA LÍNEA:
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                
                 mode_text = f"Modo: {'3D-' + args.render_mode if args.use_3d else '2D'}"
                 cv2.putText(frame, mode_text, (10, 60), 
                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-
-                # Opcional: mostrar controles disponibles
-                controls_text = "Controles: T=Textura W=Wireframe N=Siguiente B=Anterior V=3D U=2D"
-                cv2.putText(frame, controls_text, (10, frame.shape[0] - 30), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                
+                if model_renderer and args.use_3d:
+                    tex_name = model_renderer.texture_renderer.active_texture_name or "unknown"
+                    cv2.putText(frame, f"Textura: {tex_name}", (10, 90), 
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
 
                 cv2.imshow("Detección de Pose", frame)
 
+                # Manejar teclado
                 key = cv2.waitKey(1) & 0xFF
 
                 if key == 27:  # ESC
                     break
 
-                elif key == ord('1'):
+                elif key == ord('1') and model_renderer and "shirt_black" in model_renderer.texture_renderer.list_textures():
                     model_renderer.texture_renderer.set_active_texture("shirt_black")
-                    print("🎨 Textura: Playera negra")
-
-                elif key == ord('2'):
+                    print(f"🎨 Textura: shirt_black")
+                elif key == ord('2') and model_renderer and "shirt_white" in model_renderer.texture_renderer.list_textures():
                     model_renderer.texture_renderer.set_active_texture("shirt_white")
-                    print("🎨 Textura: Playera blanca")
-
-                #elif key == ord('3'):
-                #    model_renderer.texture_renderer.set_active_texture("shirt_pattern")
-                #    print("🎨 Textura: Playera con patrón")
-
-                elif key == ord('d'):
-                    model_renderer.texture_renderer.set_active_texture("debug_uv")
-                    print("🎨 Textura: Debug UV")
-
-                elif key == ord('t'):
+                    print(f"🎨 Textura: shirt_white")
+                #elif key == ord('3') and model_renderer and "shirt_blue" in model_renderer.texture_renderer.list_textures():
+                #    model_renderer.texture_renderer.set_active_texture("shirt_blue")
+                #    print(f"🎨 Textura: shirt_blue")
+                elif key == ord('4') and model_renderer and "shirt_red" in model_renderer.texture_renderer.list_textures():
+                    model_renderer.texture_renderer.set_active_texture("shirt_red")
+                    print(f"🎨 Textura: shirt_red")
+                elif key == ord('t') and model_renderer and has_uvs:
                     args.render_mode = "textured"
-                    print("🖼️ Modo: TEXTURED")
-
-                elif key == ord('w'):
+                    model_renderer.set_render_mode("textured")
+                    print(f"🎨 Modo: textured")
+                elif key == ord('w') and model_renderer:
                     args.render_mode = "wireframe"
-                    print("📐 Modo: WIREFRAME")
-                
-                elif key == ord('v'):  
-                    args.use_3d = True
-                    print("🔄 Cambiado a modo 3D")
-
-                elif key == ord('u'):  
+                    model_renderer.set_render_mode("wireframe")
+                    print(f"🎨 Modo: wireframe")
+                elif key == ord('v'):
+                    if model_renderer:
+                        args.use_3d = True
+                        print(f"🔄 Modo 3D activado")
+                elif key == ord('u'):
                     args.use_3d = False
-                    print("🔄 Cambiado a modo 2D")
-                
+                    print(f"🔄 Modo 2D activado")
+                elif key == ord('l'):  # Listar texturas disponibles
+                    if model_renderer:
+                        textures = model_renderer.texture_renderer.list_textures()
+                        print(f"\n📋 Texturas disponibles ({len(textures)}):")
+                        for i, tex in enumerate(textures, 1):
+                            active = "*" if tex == model_renderer.texture_renderer.active_texture_name else " "
+                            print(f"   {i:2}. [{active}] {tex}")
                 elif key == ord('n'):  # siguiente modelo
                     current_model_index = (current_model_index + 1) % len(model_paths)
                     new_path = model_paths[current_model_index]
@@ -395,29 +507,37 @@ def mediaPipeRender():
                         model_renderer.swap_model(new_obj)
                         print(f"🧩 Modelo cambiado a: {os.path.basename(new_path)}")
 
+
+                    
     except KeyboardInterrupt:
         print("\n🛑 Interrupción por teclado")
+    except Exception as e:
+        logger.error(f"Error en el bucle principal: {e}")
+        print(f"❌ Error: {e}")
     finally:
         # Limpiar recursos
-        if args.use_3d and model_renderer is not None:
+        print("\n🧹 Limpiando recursos...")
+        if model_renderer is not None:
             model_renderer.cleanup()
-
-        # Liberar cámara y cerrar ventanas
+        
         cap.release()
-        cv2.destroyAllWindows()   
+        cv2.destroyAllWindows()
+        print("✅ Programa finalizado correctamente")
 
 def main():
-    global shirt_png
+    print("""
+    ========================================
+    🎮 SISTEMA DE REALIDAD AUMENTADA 3D
+    ========================================
+    """)
     
-    # Cargar imagen 2D
-    try: 
-        shirt_png = cv2.imread(png_shirt_path, cv2.IMREAD_UNCHANGED)
-        if shirt_png is None:
-            print(f"Error: No se pudo cargar la imagen en {png_shirt_path}")
-            return
-    except Exception as e:
-        logger.warning(f"Error al cargar la imagen: {e}")
-        return
+    # Mostrar ayuda de uso
+    print("Uso: python main.py [OPCIONES]")
+    print("\nEjemplos:")
+    print("  python main.py --use-3d --render-mode textured --texture shirt_black")
+    print("  python main.py --list-textures  # Ver texturas disponibles")
+    print("\nPara más opciones: python main.py --help")
+    print("=" * 60)
     
     mediaPipeRender()
 

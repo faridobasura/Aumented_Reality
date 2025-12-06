@@ -5,71 +5,125 @@ from OpenGL.GLU import *
 from OpenGL.GLUT import *
 import pygame
 from pygame.locals import *
-import cv2
-import numpy as np
 import os
+from dataclasses import dataclass
 
 OBJ_PATH = os.path.expanduser('~/AR_python/Aumented_Reality/t_shirt_model/t_shirt.obj')
 
-from dataclasses import dataclass
-
 @dataclass
 class ObjModel:
+    """Modelo 3D con texturas"""
     vertices: np.ndarray
     faces: np.ndarray
-
+    uvs: np.ndarray = None  # Coordenadas UV
+    face_uvs: np.ndarray = None  # Índices de UV por cara
+    
+    def __init__(self, vertices, faces, uvs=None, face_uvs=None):
+        self.vertices = vertices
+        self.faces = faces
+        self.uvs = uvs
+        self.face_uvs = face_uvs
+    
     @staticmethod
     def load_obj(path):
+        """Carga archivo OBJ con soporte para texturas"""
         vertices = []
         faces = []
-
+        uvs = []
+        face_uvs = []
+        
+        print(f"📂 Cargando modelo: {os.path.basename(path)}")
+        
         with open(path, "r") as f:
             for line in f:
                 if line.startswith("v "):
+                    # Vértice
                     vertices.append(list(map(float, line.split()[1:4])))
+                
+                elif line.startswith("vt "):
+                    # Coordenada de textura (UV)
+                    uv = list(map(float, line.split()[1:3]))
+                    uvs.append(uv)
+                
                 elif line.startswith("f "):
-                    faces.append([int(v.split("/")[0]) - 1 for v in line.split()[1:]])
-
+                    # Cara (puede tener formato v/vt/vn o v/vt o v)
+                    face = []
+                    face_uv = []
+                    
+                    for v in line.split()[1:]:
+                        parts = v.split("/")
+                        
+                        # Índice de vértice
+                        face.append(int(parts[0]) - 1)
+                        
+                        # Índice de UV (si existe)
+                        if len(parts) > 1 and parts[1]:
+                            face_uv.append(int(parts[1]) - 1)
+                        else:
+                            face_uv.append(-1)  # Sin UV
+                    
+                    faces.append(face)
+                    face_uvs.append(face_uv)
+        
+        # Convertir a arrays numpy
+        vertices = np.array(vertices, dtype=np.float32)
+        faces = np.array(faces, dtype=np.uint32)
+        
+        # Normalizar vértices
         vertices = normalize_vertices(vertices)
-
+        
+        # Manejar UVs
+        if uvs:
+            uvs = np.array(uvs, dtype=np.float32)
+            face_uvs = np.array(face_uvs, dtype=np.uint32)
+            
+            # Verificar que todos los vértices tengan UVs
+            if len(uvs) == 0:
+                print("⚠️ Advertencia: El archivo OBJ no contiene coordenadas UV")
+                uvs = None
+                face_uvs = None
+        else:
+            uvs = None
+            face_uvs = None
+        
+        print(f"✅ Modelo cargado: {len(vertices)} vértices, {len(faces)} caras")
+        if uvs is not None:
+            print(f"   Texturas: {len(uvs)} coordenadas UV")
+        
         return ObjModel(
-            vertices=vertices.astype(np.float32),
-            faces=np.array(faces, dtype=np.uint32)
+            vertices=vertices,
+            faces=faces,
+            uvs=uvs,
+            face_uvs=face_uvs
         )
-
     
-def normalize_vertices(vertices):
-    vertices = np.array(vertices, dtype=np.float32)    # ← CONVERSIÓN NECESARIA
+    def has_texture_coordinates(self):
+        """Verifica si el modelo tiene coordenadas UV"""
+        return self.uvs is not None and self.face_uvs is not None
 
+def normalize_vertices(vertices):
+    """Normaliza vértices para que quepan en un cubo unitario"""
+    if len(vertices) == 0:
+        return vertices
+    
     min_v = vertices.min(axis=0)
     max_v = vertices.max(axis=0)
-
+    
     size = max_v - min_v
-    scale = 1.0 / max(size)
-
+    scale = 1.0 / max(size) if max(size) > 0 else 1.0
+    
     center = (min_v + max_v) / 2.0
-
+    
     return (vertices - center) * scale
 
-
+# Funciones auxiliares para compatibilidad
 def load_obj():
-    """Cargar archivo OBJ"""
-    vertices = []
-    faces = []
-    
-    with open(OBJ_PATH, 'r') as f:
-        for line in f:
-            if line.startswith('v '):
-                vertex = list(map(float, line.strip().split()[1:4]))
-                vertices.append(vertex)
-            elif line.startswith('f '):
-                face = [int(i.split('/')[0]) - 1 for i in line.strip().split()[1:]]
-                faces.append(face)
-    
-    return np.array(vertices), np.array(faces)
+    """Función de compatibilidad para cargar modelo simple"""
+    model = ObjModel.load_obj(OBJ_PATH)
+    return model.vertices, model.faces
 
 def init_gl(width, height):
-    """Inicializar OpenGL"""
+    """Inicializar OpenGL (para compatibilidad)"""
     glClearColor(0.0, 0.0, 0.0, 0.0)
     glClearDepth(1.0)
     glDepthFunc(GL_LESS)
@@ -82,10 +136,9 @@ def init_gl(width, height):
     glMatrixMode(GL_MODELVIEW)
 
 def render_to_opencv(vertices, faces):
-    """Renderizar y convertir a imagen OpenCV"""
+    """Renderizar y convertir a imagen OpenCV (para compatibilidad)"""
     width, height = 800, 600
     
-    # Inicializar Pygame con OpenGL
     pygame.init()
     display = (width, height)
     pygame.display.set_mode(display, DOUBLEBUF | OPENGL)
@@ -99,10 +152,8 @@ def render_to_opencv(vertices, faces):
     
     # Limpiar buffers
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)  # Wireframe
-    glLineWidth(1.0)  # Grosor de línea
-
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
+    glLineWidth(1.0)
     
     # Dibujar modelo
     glBegin(GL_TRIANGLES)
@@ -119,24 +170,17 @@ def render_to_opencv(vertices, faces):
     
     # Convertir a imagen OpenCV
     image = np.frombuffer(data, dtype=np.uint8).reshape(height, width, 3)
-    image = np.flipud(image)  # Voltear verticalmente
+    image = np.flipud(image)
     image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
     
     pygame.quit()
     return image
 
-# Uso principal
-def main():
-    # Cargar modelo
+if __name__ == '__main__':
+    # Cargar y mostrar modelo
     vertices, faces = load_obj()
-    
-    # Renderizar a imagen OpenCV
     img = render_to_opencv(vertices, faces)
     
-    # Mostrar con OpenCV
     cv2.imshow('Modelo 3D', img)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
-
-if __name__ == '__main__':
-    main()
