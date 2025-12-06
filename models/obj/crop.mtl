@@ -9,25 +9,14 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.450000
 d 1.000000
 illum 2
-map_Kd pcl.png
-
-newmtl Material444768
-Ns 287.632416
-Ka 1.000000 1.000000 1.000000
-Ks 1.000000 1.000000 1.000000
-Ke 0.000000 0.000000 0.000000
-Ni 1.450000
-illum 2
-map_Kd E:/Digital/Save Files/Clothing/Crop T/Expo/Pick_Stitch.png
-map_d E:/Digital/Save Files/Clothing/Crop T/Expo/Pick_Stitch.png
+map_Kd black_solid.png
 
 newmtl PT_FABRIC_FRONT_713199
+Ns 287.632416
 Ka 1.000000 1.000000 1.000000
 Ks 0.500000 0.500000 0.500000
 Ke 0.000000 0.000000 0.000000
 Ni 1.450000
 d 1.000000
 illum 2
-map_Kd E:/Digital/Save Files/Clothing/Crop T/Expo/2c179027a0c5460800aa7d35b634e3c4.1000x1000x1.jpg
-map_Ns E:/Digital/Textures/00 Fabrics/Fabric019_2K-WHITE/REGULAR/3K/Fabric019_2K_GLOSS_3K.jpg
-map_Bump E:/Digital/Textures/00 Fabrics/Fabric019_2K-WHITE/REGULAR/3K/Fabric019_2K_NRM_3K.jpg
+map_Kd pcl.png

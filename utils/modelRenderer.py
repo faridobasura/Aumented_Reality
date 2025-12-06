@@ -28,7 +28,8 @@ class ModelRenderer:
         self.render_mode = "wireframe"
         
         if obj:
-            self.detect_anchor_vertices()
+            #self.detect_anchor_vertices()
+            self.detect_anchor_vertices_robust()
             self.model_shoulder_dist = self._calculate_shoulder_distance()
             self.model_anchor_offset = self._calculate_anchor_offset()
             self.debug_draw_anchor_vertices()
@@ -858,7 +859,8 @@ class ModelRenderer:
 
         # Asignar nuevo objeto
         self.obj_model = new_obj
-        self.detect_anchor_vertices()
+        #self.detect_anchor_vertices()
+        self.detect_anchor_vertices_robust()
 
 
         # Recalcular métricas dependientes del modelo
@@ -877,51 +879,48 @@ class ModelRenderer:
 
     def detect_anchor_vertices(self):
         """
-        Detecta anchors automáticamente buscando hombros y caderas
-        según geometría del modelo.
+        Detecta hombros y caderas usando franjas verticales proporcionales.
+        Funciona perfecto si todos los modelos vienen con la misma orientación
+        desde Blender.
         """
 
-        if self.obj_model is None or len(self.obj_model.vertices) == 0:
-            print("❌ No hay modelo cargado para detectar vértices ancla")
+        if self.obj_model is None:
+            print("❌ No hay modelo cargado para detectar anchors")
             return
 
         verts = np.array(self.obj_model.vertices)
         xs = verts[:, 0]
         ys = verts[:, 1]
-        zs = verts[:, 2]
 
-        # ---------------------------------------------------------
-        # HOMBROS: tomamos el 5% de vértices más altos (Y grande)
-        # ---------------------------------------------------------
-        top_threshold = np.percentile(ys, 95)
-        top_verts_idx = np.where(ys >= top_threshold)[0]
+        # 1) obtener altura total del modelo
+        y_min = ys.min()
+        y_max = ys.max()
+        height = y_max - y_min
 
-        if len(top_verts_idx) < 2:
-            print("⚠️ No suficientes vértices altos para hombros, usando máximos absolutos")
-            top_verts_idx = np.argsort(ys)[-10:]  # top 10 altos
+        # 2) regiones proporcionales
+        SHOULDER_ZONE_MIN = y_min + height * 0.65
+        SHOULDER_ZONE_MAX = y_min + height * 0.90
 
-        # left shoulder → menor X entre los altos
-        left_shoulder = top_verts_idx[np.argmin(xs[top_verts_idx])]
+        HIP_ZONE_MIN = y_min + height * 0.10
+        HIP_ZONE_MAX = y_min + height * 0.35
 
-        # right shoulder → mayor X entre los altos
-        right_shoulder = top_verts_idx[np.argmax(xs[top_verts_idx])]
+        # 3) seleccionar vértices dentro de cada zona
+        shoulder_idxs = np.where((ys >= SHOULDER_ZONE_MIN) & (ys <= SHOULDER_ZONE_MAX))[0]
+        hip_idxs = np.where((ys >= HIP_ZONE_MIN) & (ys <= HIP_ZONE_MAX))[0]
 
-        # ---------------------------------------------------------
-        # CADERAS: tomamos 10% de los vértices más bajos (Y pequeño)
-        # ---------------------------------------------------------
-        low_threshold = np.percentile(ys, 10)
-        low_verts_idx = np.where(ys <= low_threshold)[0]
+        if len(shoulder_idxs) < 2 or len(hip_idxs) < 2:
+            print("⚠️ Regiones insuficientes, intenta ajustar rangos.")
+            print(f"Shoulders encontrados: {len(shoulder_idxs)}, hips: {len(hip_idxs)}")
+            return
 
-        if len(low_verts_idx) < 2:
-            print("⚠️ No suficientes vértices bajos para caderas, usando mínimos absolutos")
-            low_verts_idx = np.argsort(ys)[:10]
+        # 4) seleccionar por X
+        left_shoulder  = shoulder_idxs[np.argmin(xs[shoulder_idxs])]
+        right_shoulder = shoulder_idxs[np.argmax(xs[shoulder_idxs])]
 
-        left_hip = low_verts_idx[np.argmin(xs[low_verts_idx])]
-        right_hip = low_verts_idx[np.argmax(xs[low_verts_idx])]
+        left_hip       = hip_idxs[np.argmin(xs[hip_idxs])]
+        right_hip      = hip_idxs[np.argmax(xs[hip_idxs])]
 
-        # ---------------------------------------------------------
-        # Actualizamos ANCHOR_VERTEX_IDS dinámicamente
-        # ---------------------------------------------------------
+        # ============ guardar 😎 ============
         self.ANCHOR_VERTEX_IDS = {
             "left_shoulder": int(left_shoulder),
             "right_shoulder": int(right_shoulder),
@@ -929,11 +928,244 @@ class ModelRenderer:
             "right_hip": int(right_hip)
         }
 
-        print("\n🎯 ANCHOR VERTEX DETECTADOS AUTOMÁTICAMENTE:")
-        for k, v in self.ANCHOR_VERTEX_IDS.items():
-            print(f"  {k}: idx {v} → {self.obj_model.vertices[v]}")
+        # Depuración
+        print("\n🎯 ANCHOR VERTICES DETECTADOS (Zonas proporcionales):")
+        for k, i in self.ANCHOR_VERTEX_IDS.items():
+            print(f"  {k}: idx {i}, pos {verts[i]}")
 
-    
+    def _validate_anchor_set(self, verts, anchors):
+        """
+        Valida un conjunto de anchors (diccionario name->idx).
+        Devuelve una puntuación (mayor = mejor) y razones (lista).
+        Criterios:
+          - hombros por encima de caderas (Y)
+          - distancia hombros no nula y razonable respecto height
+          - simetría: centro de hombros cercano al centro de la malla en X
+        """
+        reasons = []
+        score = 0.0
+
+        if not anchors:
+            return score, ["No anchors"]
+
+        ys = verts[:, 1]
+        xs = verts[:, 0]
+
+        # Extraer puntos
+        try:
+            ls = verts[anchors['left_shoulder']]
+            rs = verts[anchors['right_shoulder']]
+            lh = verts[anchors['left_hip']]
+            rh = verts[anchors['right_hip']]
+        except Exception as e:
+            return 0.0, [f"Error extrayendo índices: {e}"]
+
+        y_ls, y_rs = ls[1], rs[1]
+        y_lh, y_rh = lh[1], rh[1]
+
+        # 1) hombros por encima de caderas
+        shoulders_above = (y_ls > y_lh) and (y_rs > y_rh)
+        if shoulders_above:
+            score += 1.0
+        else:
+            reasons.append("hombros no están por encima de caderas")
+
+        # 2) distancia hombros
+        shoulder_dist = np.linalg.norm(rs - ls)
+        height = ys.max() - ys.min() if (ys.max() - ys.min()) > 1e-6 else 1.0
+        rel = shoulder_dist / height
+        # valorar distancia relativa (esperamos algo entre 0.15 y 0.7 típicamente)
+        if rel > 0.12 and rel < 0.9:
+            score += 1.0
+        else:
+            reasons.append(f"distancia hombros anómala: {shoulder_dist:.4f} (rel {rel:.3f})")
+
+        # 3) simetría X: centro hombros cerca del centro de la malla X
+        torso_center_x = ((ls[0] + rs[0]) / 2.0)
+        mesh_center_x = xs.mean()
+        if abs(torso_center_x - mesh_center_x) < (0.25 * (xs.max() - xs.min())):
+            score += 1.0
+        else:
+            reasons.append("centro hombros muy desplazado respecto al centro del mesh")
+
+        # 4) hombros nivelados (no necesariamente exacto)
+        if abs(y_ls - y_rs) < 0.25 * height:
+            score += 0.5
+        else:
+            reasons.append("hombros no nivelados")
+
+        return score, reasons
+
+
+    def detect_anchor_vertices_robust(self):
+        """
+        Detecta anchors probando 3 heurísticas y eligiendo la mejor.
+        Imprime diagnóstico para ver por qué una heurística falla.
+        """
+
+        if self.obj_model is None or len(self.obj_model.vertices) == 0:
+            print("❌ No hay modelo cargado para detectar anchors")
+            return
+
+        verts = np.array(self.obj_model.vertices)
+        xs = verts[:, 0]
+        ys = verts[:, 1]
+        zs = verts[:, 2]
+
+        candidates = {}  # name -> dict(method, anchors)
+
+        # -----------------------
+        # MÉTODO 1: ZONAS PROPORCIONALES (si tus modelos tienen misma orientación)
+        # -----------------------
+        try:
+            y_min = ys.min()
+            y_max = ys.max()
+            height = y_max - y_min if (y_max - y_min) > 1e-6 else 1.0
+
+            SHOULDER_ZONE_MIN = y_min + height * 0.65
+            SHOULDER_ZONE_MAX = y_min + height * 0.90
+            HIP_ZONE_MIN = y_min + height * 0.12
+            HIP_ZONE_MAX = y_min + height * 0.40
+
+            shoulder_idxs = np.where((ys >= SHOULDER_ZONE_MIN) & (ys <= SHOULDER_ZONE_MAX))[0]
+            hip_idxs = np.where((ys >= HIP_ZONE_MIN) & (ys <= HIP_ZONE_MAX))[0]
+
+            if len(shoulder_idxs) >= 2 and len(hip_idxs) >= 2:
+                ls = shoulder_idxs[np.argmin(xs[shoulder_idxs])]
+                rs = shoulder_idxs[np.argmax(xs[shoulder_idxs])]
+                lh = hip_idxs[np.argmin(xs[hip_idxs])]
+                rh = hip_idxs[np.argmax(xs[hip_idxs])]
+
+                anchors = {
+                    "left_shoulder": int(ls),
+                    "right_shoulder": int(rs),
+                    "left_hip": int(lh),
+                    "right_hip": int(rh)
+                }
+                score, reasons = self._validate_anchor_set(verts, anchors)
+                candidates['proportional_zones'] = {'anchors': anchors, 'score': score, 'reasons': reasons}
+            else:
+                candidates['proportional_zones'] = {'anchors': None, 'score': 0.0, 'reasons': [f"insuficientes vértices en zonas (shoulders {len(shoulder_idxs)}, hips {len(hip_idxs)})"]}
+        except Exception as e:
+            candidates['proportional_zones'] = {'anchors': None, 'score': 0.0, 'reasons': [f"error método proportional: {e}"]}
+
+        # -----------------------
+        # MÉTODO 2: PCA + franjas (más robusto contra rotación leve)
+        # -----------------------
+        try:
+            centered = verts - verts.mean(axis=0)
+            cov = np.cov(centered.T)
+            eigvals, eigvecs = np.linalg.eig(cov)
+            order = np.argsort(eigvals)[::-1]
+            eigvecs = eigvecs[:, order]
+
+            # Asumimos vertical ~ segundo o primer componente, probamos ambas
+            methods_pca = []
+            for vertical_idx in [1, 0]:
+                lateral_axis = eigvecs[:, 0]
+                vertical_axis = eigvecs[:, vertical_idx]
+                forward_axis = eigvecs[:, 2] if vertical_idx != 2 else eigvecs[:, 1]
+
+                v_proj = np.column_stack([
+                    centered @ lateral_axis,
+                    centered @ vertical_axis,
+                    centered @ forward_axis
+                ])
+                X = v_proj[:, 0]
+                Y = v_proj[:, 1]
+
+                shoulder_thresh = np.percentile(Y, 88)
+                hip_thresh = np.percentile(Y, 12)
+
+                shoulder_idxs = np.where(Y >= shoulder_thresh)[0]
+                hip_idxs = np.where(Y <= hip_thresh)[0]
+
+                if len(shoulder_idxs) >= 2 and len(hip_idxs) >= 2:
+                    ls = shoulder_idxs[np.argmin(X[shoulder_idxs])]
+                    rs = shoulder_idxs[np.argmax(X[shoulder_idxs])]
+                    lh = hip_idxs[np.argmin(X[hip_idxs])]
+                    rh = hip_idxs[np.argmax(X[hip_idxs])]
+
+                    anchors = {
+                        "left_shoulder": int(ls),
+                        "right_shoulder": int(rs),
+                        "left_hip": int(lh),
+                        "right_hip": int(rh)
+                    }
+                    score, reasons = self._validate_anchor_set(verts, anchors)
+                    methods_pca.append((vertical_idx, anchors, score, reasons))
+
+            # escoger mejor entre variantes PCA
+            if methods_pca:
+                best = max(methods_pca, key=lambda x: x[2])
+                candidates['pca'] = {'anchors': best[1], 'score': best[2], 'reasons': best[3], 'variant': best[0]}
+            else:
+                candidates['pca'] = {'anchors': None, 'score': 0.0, 'reasons': ["PCA no encontró suficientes vértices en franjas"]}
+        except Exception as e:
+            candidates['pca'] = {'anchors': None, 'score': 0.0, 'reasons': [f"error PCA: {e}"]}
+
+        # -----------------------
+        # MÉTODO 3: TOP/BOTTOM PERCENTIL SIMPLE (fallback)
+        # -----------------------
+        try:
+            top_thresh = np.percentile(ys, 94)
+            bottom_thresh = np.percentile(ys, 6)
+            top_idxs = np.where(ys >= top_thresh)[0]
+            bottom_idxs = np.where(ys <= bottom_thresh)[0]
+
+            if len(top_idxs) >= 2 and len(bottom_idxs) >= 2:
+                ls = top_idxs[np.argmin(xs[top_idxs])]
+                rs = top_idxs[np.argmax(xs[top_idxs])]
+                lh = bottom_idxs[np.argmin(xs[bottom_idxs])]
+                rh = bottom_idxs[np.argmax(xs[bottom_idxs])]
+                anchors = {"left_shoulder": int(ls), "right_shoulder": int(rs), "left_hip": int(lh), "right_hip": int(rh)}
+                score, reasons = self._validate_anchor_set(verts, anchors)
+                candidates['percentile'] = {'anchors': anchors, 'score': score, 'reasons': reasons}
+            else:
+                candidates['percentile'] = {'anchors': None, 'score': 0.0, 'reasons': [f"percentiles insuficientes (top {len(top_idxs)}, bottom {len(bottom_idxs)})"]}
+        except Exception as e:
+            candidates['percentile'] = {'anchors': None, 'score': 0.0, 'reasons': [f"error percentil: {e}"]}
+
+        # -----------------------
+        # ELEGIR MEJOR CANDIDATO
+        # -----------------------
+        best_method = None
+        best_score = -1.0
+        for m, info in candidates.items():
+            sc = info.get('score', 0.0)
+            if sc > best_score:
+                best_score = sc
+                best_method = m
+
+        print("\n🔎 Diagnóstico detección anchors:")
+        for m, info in candidates.items():
+            print(f" - Método '{m}': score={info.get('score',0.0):.2f}, reasons={info.get('reasons')}")
+        print(f"👉 Seleccionado: {best_method} (score {best_score:.2f})")
+
+        selected = candidates.get(best_method, {})
+        anchors = selected.get('anchors')
+
+        if anchors is None:
+            print("❌ No se encontró un conjunto válido de anchors automáticamente.")
+            # como fallback: dejar anchors por defecto si existen (no tocar)
+            return
+
+        # Guardar
+        self.ANCHOR_VERTEX_IDS = {
+            "left_shoulder": int(anchors['left_shoulder']),
+            "right_shoulder": int(anchors['right_shoulder']),
+            "left_hip": int(anchors['left_hip']),
+            "right_hip": int(anchors['right_hip'])
+        }
+
+        # Mostrar coordenadas escogidas
+        print("\n🎯 ANCHOR VERTICES DEFINITIVOS:")
+        for k, idx in self.ANCHOR_VERTEX_IDS.items():
+            pos = verts[idx]
+            print(f"  {k}: idx {idx} -> {pos}")
+
+        return
+
 def debug_print_matrix(name, matrix):
     """Función de debug para matrices"""
     print(f"\n{name}:")
