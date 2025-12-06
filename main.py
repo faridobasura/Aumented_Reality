@@ -105,56 +105,52 @@ def mediaPipeRender():
     model_renderer = None
 
     try:
-        if args.use_3d:
-            try:
-                obj_loaded = ObjModel.load_obj(obj_path)
-                if obj_loaded is not None:
-                    if obj_loaded:
-                        print(f"📐 Rango de coordenadas del modelo:")
-                        vertices_array = np.array(obj_loaded.vertices)
-                        print(f"  X: [{vertices_array[:, 0].min():.3f}, {vertices_array[:, 0].max():.3f}]")
-                        print(f"  Y: [{vertices_array[:, 1].min():.3f}, {vertices_array[:, 1].max():.3f}]")
-                        print(f"  Z: [{vertices_array[:, 2].min():.3f}, {vertices_array[:, 2].max():.3f}]")
-                        print(f"  Centro: {vertices_array.mean(axis=0)}")
-                    # Calcular tamaño de render basado en el tamaño del frame de la cámara
-                    render_width = max(512, min(FRAME_W, 1024))  # Entre 512 y 1024
-                    render_height = max(512, min(FRAME_H, 1024))
-
-                    model_renderer = ModelRenderer(width=render_width, height=render_height, obj=obj_loaded)
-                    model_renderer.set_render_mode(args.render_mode)
-
-                    if model_renderer is not None:
-                        # Test de orientación simple
-                        print("\n🧪 TEST DE ORIENTACIÓN BÁSICA")
+        try:
+            obj_loaded = ObjModel.load_obj(obj_path)
+            if obj_loaded is not None:
+                if obj_loaded:
+                    print(f"📐 Rango de coordenadas del modelo:")
+                    vertices_array = np.array(obj_loaded.vertices)
+                    print(f"  X: [{vertices_array[:, 0].min():.3f}, {vertices_array[:, 0].max():.3f}]")
+                    print(f"  Y: [{vertices_array[:, 1].min():.3f}, {vertices_array[:, 1].max():.3f}]")
+                    print(f"  Z: [{vertices_array[:, 2].min():.3f}, {vertices_array[:, 2].max():.3f}]")
+                    print(f"  Centro: {vertices_array.mean(axis=0)}")
+                # Calcular tamaño de render basado en el tamaño del frame de la cámara
+                render_width = max(512, min(FRAME_W, 1024))  # Entre 512 y 1024
+                render_height = max(512, min(FRAME_H, 1024))
+                model_renderer = ModelRenderer(width=render_width, height=render_height, obj=obj_loaded)
+                model_renderer.set_render_mode(args.render_mode)
+                if model_renderer is not None:
+                    # Test de orientación simple
+                    print("\n🧪 TEST DE ORIENTACIÓN BÁSICA")
+                    
+                    # Aplicar transformación de prueba
+                    test_translation = np.array([0.0, 0.0, 0.0])
+                    test_rotation = np.eye(3)  # Rotación identidad
+                    test_scale = 1.0
+                    
+                    model_renderer.set_model_transform(test_translation, test_rotation, test_scale)
+                    
+                    # Renderizar una imagen
+                    test_img = model_renderer.render_to_image()
+                    
+                    if test_img is not None:
+                        # Mostrar estadísticas de la imagen
+                        print(f"  Imagen de test: {test_img.shape}")
+                        print(f"  Valor medio de píxeles: {np.mean(test_img):.2f}")
                         
-                        # Aplicar transformación de prueba
-                        test_translation = np.array([0.0, 0.0, 0.0])
-                        test_rotation = np.eye(3)  # Rotación identidad
-                        test_scale = 1.0
-                        
-                        model_renderer.set_model_transform(test_translation, test_rotation, test_scale)
-                        
-                        # Renderizar una imagen
-                        test_img = model_renderer.render_to_image()
-                        
-                        if test_img is not None:
-                            # Mostrar estadísticas de la imagen
-                            print(f"  Imagen de test: {test_img.shape}")
-                            print(f"  Valor medio de píxeles: {np.mean(test_img):.2f}")
-                            
-                            # Verificar si hay algo visible (no todo negro)
-                            if np.mean(test_img) > 10:
-                                print("  ✅ Modelo visible en renderizado")
-                            else:
-                                print("  ⚠️  Modelo NO visible (posiblemente fuera de vista)")
-
-                    print(f"✅ Modelo 3D cargado. Tamaño de render: {render_width}x{render_height}")
-                else:
-                    print("❌ objectLoader devolvió None para el OBJ.")
-                    args.use_3d = False
-            except Exception as e:
-                logger.error(f"Error cargando OBJ: {e}")
+                        # Verificar si hay algo visible (no todo negro)
+                        if np.mean(test_img) > 10:
+                            print("  ✅ Modelo visible en renderizado")
+                        else:
+                            print("  ⚠️  Modelo NO visible (posiblemente fuera de vista)")
+                print(f"✅ Modelo 3D cargado. Tamaño de render: {render_width}x{render_height}")
+            else:
+                print("❌ objectLoader devolvió None para el OBJ.")
                 args.use_3d = False
+        except Exception as e:
+            logger.error(f"Error cargando OBJ: {e}")
+            args.use_3d = False
 
 
         # ─────────────────────────────
@@ -355,9 +351,9 @@ def mediaPipeRender():
                     model_renderer.texture_renderer.set_active_texture("shirt_white")
                     print("🎨 Textura: Playera blanca")
 
-                elif key == ord('3'):
-                    model_renderer.texture_renderer.set_active_texture("shirt_pattern")
-                    print("🎨 Textura: Playera con patrón")
+                #elif key == ord('3'):
+                #    model_renderer.texture_renderer.set_active_texture("shirt_pattern")
+                #    print("🎨 Textura: Playera con patrón")
 
                 elif key == ord('d'):
                     model_renderer.texture_renderer.set_active_texture("debug_uv")
