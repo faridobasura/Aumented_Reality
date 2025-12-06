@@ -1,23 +1,19 @@
 import os
 import math
 import logging
-import argparse
-import pygame
 import numpy as np
-import glfw 
 
 # 3rd party
 import cv2
 import mediapipe as mp
-from mediapipe import solutions
-from mediapipe.tasks import python
-from mediapipe.tasks.python import vision
-from mediapipe.framework.formats import landmark_pb2
 
 # Importar el cargador de objetos 3D
 from utils.objectLoader import ObjModel
 from utils import twoD_Render
 from utils.modelRenderer import ModelRenderer
+
+
+from utils.app_args import args
 
 SHOULDER_LEFT = 11
 SHOULDER_RIGHT = 12
@@ -39,53 +35,6 @@ FRAME_H = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
 cv2.namedWindow("Detección de Pose", cv2.WINDOW_NORMAL)
 
-def parse_arguments():
-    """
-    Parsea los argumentos de línea de comandos, incluyendo
-    la selección de textura inicial.
-    """
-    parser = argparse.ArgumentParser(
-        description='Superposición de prenda con detección de pose',
-        formatter_class=argparse.RawTextHelpFormatter
-    )
-    
-    parser.add_argument('--debug', '-d', action='store_true', 
-                       help='Activar modo debug')
-    
-    parser.add_argument('--use-3d', action='store_true', 
-                       help='Usar modelo 3D')
-    
-    parser.add_argument('--simplify-factor', type=int, default=3,
-                       help='Factor de simplificación 3D (mayor = mejor rendimiento)')
-    
-    parser.add_argument('--render-mode',
-            type=str,
-            default='wireframe',
-            choices=['textured', 'wireframe'],
-            help='Modo de renderizado 3D'
-        )
-    
-    # Texturas disponibles dinámicamente (se cargarán de archivos)
-    parser.add_argument('--texture',
-            type=str,
-            default=None,  # Ninguna por defecto
-            help="""Nombre de la textura a usar inicialmente.
-Debe corresponder a un archivo en el directorio de texturas.
-Ejemplos: shirt_black, shirt_white, shirt_blue, shirt_red"""
-        )
-    
-    parser.add_argument('--textures-dir',
-            type=str,
-            default=os.path.expanduser('~/AR_python/Aumented_Reality/models/textures/'),
-            help='Directorio donde buscar texturas'
-        )
-    
-    parser.add_argument('--list-textures',
-            action='store_true',
-            help='Listar texturas disponibles y salir'
-        )
-    
-    return parser.parse_args()
 
 def load_textures(model_renderer, textures_dir):
     """
@@ -103,7 +52,7 @@ def load_textures(model_renderer, textures_dir):
     texture_files = [
         ("shirt_black", "black_solid.png"),
         ("shirt_white", "white_solid.png"),
-        ("shirt_blue", "blue_solid.jpg"),
+       # ("shirt_blue", "blue_solid.jpg"),
         ("shirt_red", "red_solid.png"),
     ]
     
@@ -135,7 +84,7 @@ def list_available_textures(textures_dir):
     texture_files = [
         ("shirt_black", "black_solid.png", "Playera negra sólida"),
         ("shirt_white", "white_solid.png", "Playera blanca sólida"),
-        ("shirt_blue", "blue_solid.png", "Playera azul sólida"),
+       # ("shirt_blue", "blue_solid.png", "Playera azul sólida"),
         ("shirt_red", "red_solid.png", "Playera roja sólida"),
     ]
     
@@ -164,7 +113,7 @@ def list_available_textures(textures_dir):
     
     print("\n🎮 USO:")
     print("  Para usar una textura: python main.py --texture NOMBRE")
-    print("  Ejemplo: python main.py --texture shirt_blue")
+    print("  Ejemplo: python main.py --texture shirt_black")
     print("=" * 60)
     
     return available_files
@@ -187,7 +136,6 @@ def render_shirt_adaptive(model_renderer, torso_width, torso_height, render_mode
     return rgba
 
 def mediaPipeRender():
-    args = parse_arguments()
     
     # Si se solicita listar texturas, hacerlo y salir
     if args.list_textures:
@@ -470,9 +418,9 @@ def mediaPipeRender():
                 elif key == ord('2') and model_renderer and "shirt_white" in model_renderer.texture_renderer.list_textures():
                     model_renderer.texture_renderer.set_active_texture("shirt_white")
                     print(f"🎨 Textura: shirt_white")
-                elif key == ord('3') and model_renderer and "shirt_blue" in model_renderer.texture_renderer.list_textures():
-                    model_renderer.texture_renderer.set_active_texture("shirt_blue")
-                    print(f"🎨 Textura: shirt_blue")
+                #elif key == ord('3') and model_renderer and "shirt_blue" in model_renderer.texture_renderer.list_textures():
+                #    model_renderer.texture_renderer.set_active_texture("shirt_blue")
+                #    print(f"🎨 Textura: shirt_blue")
                 elif key == ord('4') and model_renderer and "shirt_red" in model_renderer.texture_renderer.list_textures():
                     model_renderer.texture_renderer.set_active_texture("shirt_red")
                     print(f"🎨 Textura: shirt_red")
@@ -524,8 +472,7 @@ def main():
     # Mostrar ayuda de uso
     print("Uso: python main.py [OPCIONES]")
     print("\nEjemplos:")
-    print("  python main.py --use-3d --render-mode textured --texture shirt_blue")
-    print("  python main.py --use-3d --texture checkerboard")
+    print("  python main.py --use-3d --render-mode textured --texture shirt_black")
     print("  python main.py --list-textures  # Ver texturas disponibles")
     print("\nPara más opciones: python main.py --help")
     print("=" * 60)

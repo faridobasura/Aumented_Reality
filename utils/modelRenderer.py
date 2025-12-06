@@ -6,6 +6,7 @@ import glfw
 import os
 import ctypes
 import sys
+from utils.app_args import args
 
 from utils.textureRenderer import TextureRenderer
 
@@ -510,7 +511,8 @@ class ModelRenderer:
         self._draw_model()
         
         # 5. Dibujar vértices ancla para debug
-        self.draw_anchor_vertices_with_labels()
+        if args.debug:
+            self.draw_anchor_vertices_with_labels()
         
         # 6. Leer píxeles
         buffer = glReadPixels(0, 0, self.width, self.height,

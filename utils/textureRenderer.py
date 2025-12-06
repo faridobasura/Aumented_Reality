@@ -1,6 +1,5 @@
 """
 TextureRenderer - Sistema de gestión de texturas para modelos 3D
-Versión simplificada: Solo carga texturas desde archivos
 """
 
 import numpy as np
@@ -120,13 +119,13 @@ class TextureRenderer:
         if self.active_texture_id is not None:
             glActiveTexture(GL_TEXTURE0)
             glBindTexture(GL_TEXTURE_2D, self.active_texture_id)
-            glEnable(GL_TEXTURE_2D)
+            # Nota: En OpenGL moderno, NO se debe usar glEnable(GL_TEXTURE_2D)
     
     
     def unbind_texture(self):
         """Desvincular textura"""
         glBindTexture(GL_TEXTURE_2D, 0)
-        glDisable(GL_TEXTURE_2D)
+        # Nota: En OpenGL moderno, NO se debe usar glDisable(GL_TEXTURE_2D)
     
     
     def list_textures(self) -> list:
