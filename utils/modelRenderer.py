@@ -53,6 +53,8 @@ class ModelRenderer:
 
         
         self.texture_renderer = TextureRenderer()
+
+        self.brightness = 0.2  # Valor por defecto (0.0 - 1.0)
         
         # Cargar texturas por defecto
         
@@ -116,6 +118,8 @@ class ModelRenderer:
         self.view_loc = glGetUniformLocation(self.shader_program, "view")
         self.proj_loc = glGetUniformLocation(self.shader_program, "projection")
         self.use_texture_loc = glGetUniformLocation(self.shader_program, "useTexture")
+        self.brightness_loc = glGetUniformLocation(self.shader_program, "brightness")
+    
         
         print("✅ Shaders principales compilados con soporte para texturas")
         
@@ -502,36 +506,40 @@ class ModelRenderer:
     def _draw_model(self):
         """Dibuja el modelo con shaders y texturas"""
         glUseProgram(self.shader_program)
-        
+
         # Pasar matrices a shaders
         if hasattr(self, 'model_matrix'):
             glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, self.model_matrix.T)
             glUniformMatrix4fv(self.view_loc, 1, GL_FALSE, self.view_matrix.T)
             glUniformMatrix4fv(self.proj_loc, 1, GL_FALSE, self.proj_matrix.T)
-        
+
         # Configurar si usar textura
         use_texture = (self.render_mode == "textured" and 
                       self.obj_model.has_texture_coordinates())
         glUniform1i(self.use_texture_loc, 1 if use_texture else 0)
-        
+
+        # NUEVO: Pasar valor de brightness al shader
+        if hasattr(self, 'brightness_loc') and self.brightness_loc != -1:
+            glUniform1f(self.brightness_loc, self.brightness)
+
         # Vincular textura si es necesario
         if use_texture:
             self.texture_renderer.bind_active_texture()
             glUniform1i(glGetUniformLocation(self.shader_program, "textureSampler"), 0)
         else:
             self.texture_renderer.unbind_texture()
-        
+
         glBindVertexArray(self.vao)
-        
+
         # Configurar modo de renderizado
         if self.render_mode == "wireframe":
             glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
             glLineWidth(1.0)
         else:
             glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
-        
+
         glDrawArrays(GL_TRIANGLES, 0, self.vertex_count)
-        
+
         # Limpiar
         glBindVertexArray(0)
         if use_texture:
@@ -783,20 +791,6 @@ class ModelRenderer:
         
         return rotation, scale, translation
     
-    def _calculate_average_distance(self, points):
-        """Calcula la distancia promedio entre puntos"""
-        if len(points) < 2:
-            return 0.0
-        
-        # Calcular todas las distancias entre pares de puntos
-        distances = []
-        for i in range(len(points)):
-            for j in range(i + 1, len(points)):
-                dist = np.linalg.norm(points[i] - points[j])
-                distances.append(dist)
-        
-        return np.mean(distances) if distances else 0.0
-    
     def verify_alignment_quality(self, landmarks_3d_corrected):
         """Verificación de calidad de alineación"""
         errors = {}
@@ -838,6 +832,28 @@ class ModelRenderer:
             return avg_error
         return 0.0
     
+    def set_brightness(self, value):
+        """
+        Establece el brillo adicional
+
+        Args:
+            value (float): Valor entre 0.0 y 1.0
+                          0.0 = sin brillo extra
+                          0.2 = brillo moderado (recomendado para texturas oscuras)
+                          0.5 = brillo alto
+                          1.0 = brillo máximo
+        """
+        self.brightness = max(0.0, min(1.0, value))  # Clamp entre 0 y 1
+        print(f"💡 Brillo ajustado a: {self.brightness:.2f}")
+
+    def increase_brightness(self, step=0.1):
+        """Incrementa el brillo"""
+        self.set_brightness(self.brightness + step)
+
+    def decrease_brightness(self, step=0.1):
+        """Decrementa el brillo"""
+        self.set_brightness(self.brightness - step)
+    
 
     def cleanup(self):
         """Limpia recursos OpenGL y GLFW"""
@@ -869,74 +885,6 @@ class ModelRenderer:
         glfw.terminate()
         print("✅ Recursos limpiados correctamente")
     
-    def debug_print_vectors(self, rotation):
-        """Imprime los vectores de dirección de la rotación"""
-        print(f"\n🧭 VECTORES DE DIRECCIÓN:")
-        
-        # Vectores base
-        forward = rotation @ np.array([0, 0, 1])  # Z positivo es hacia adelante en Blender
-        right = rotation @ np.array([1, 0, 0])    # X positivo es hacia la derecha
-        up = rotation @ np.array([0, 1, 0])       # Y positivo es hacia arriba
-        
-        print(f"   Forward (Z): {forward}")
-        print(f"   Right (X): {right}")
-        print(f"   Up (Y): {up}")
-        
-        return forward, right, up
-
-    def calculate_manual_alignment(self, model_points_arr, target_points_arr):
-        """
-        Alineación MANUAL basada en vectores del torso
-        Esto evita los problemas de Procrustes con la orientación
-        """
-        print("\n🎯 ALINEACIÓN MANUAL (basada en vectores)")
-
-        # 1. Extraer puntos específicos
-        # Suponiendo que los puntos están en este orden: [left_shoulder, right_shoulder, left_hip, right_hip]
-        if len(model_points_arr) >= 4 and len(target_points_arr) >= 4:
-            # Puntos del modelo
-            m_ls = model_points_arr[0]  # left shoulder
-            m_rs = model_points_arr[1]  # right shoulder
-            m_lh = model_points_arr[2]  # left hip
-            m_rh = model_points_arr[3]  # right hip
-
-            # Puntos objetivo
-            t_ls = target_points_arr[0]
-            t_rs = target_points_arr[1]
-            t_lh = target_points_arr[2]
-            t_rh = target_points_arr[3]
-
-            # 2. Calcular vectores para el modelo
-            m_right = m_rs - m_ls  # De izquierda a derecha
-            m_down = (m_lh + m_rh)/2 - (m_ls + m_rs)/2  # De hombros a caderas
-            m_forward = np.cross(m_right, m_down)  # Forward es perpendicular
-
-            # Normalizar
-            m_right = m_right / np.linalg.norm(m_right)
-            m_down = m_down / np.linalg.norm(m_down)
-            m_forward = m_forward / np.linalg.norm(m_forward)
-
-            # 3. Calcular vectores para los landmarks
-            t_right = t_rs - t_ls
-            t_down = (t_lh + t_rh)/2 - (t_ls + t_rs)/2
-            t_forward = np.cross(t_right, t_down)
-
-            # Normalizar
-            t_right = t_right / np.linalg.norm(t_right)
-            t_down = t_down / np.linalg.norm(t_down)
-            t_forward = t_forward / np.linalg.norm(t_forward)
-
-            # 4. Crear matrices de rotación
-            m_basis = np.column_stack([m_right, m_down, m_forward])
-            t_basis = np.column_stack([t_right, t_down, t_forward])
-
-            # 5. Calcular rotación que convierte m_basis a t_basis
-            rotation = t_basis @ np.linalg.inv(m_basis)
-
-            print(f"   Rotación calculada (manual)")
-            return rotation
-
-        return np.eye(3)  # Matriz identidad si falla
 
     
 def debug_print_matrix(name, matrix):

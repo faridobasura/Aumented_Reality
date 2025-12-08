@@ -52,7 +52,6 @@ def load_textures(model_renderer, textures_dir):
     texture_files = [
         ("shirt_black", "black_solid.png"),
         ("shirt_white", "white_solid.png"),
-       # ("shirt_blue", "blue_solid.jpg"),
         ("shirt_red", "red_solid.png"),
     ]
     
@@ -117,6 +116,109 @@ def list_available_textures(textures_dir):
     print("=" * 60)
     
     return available_files
+
+def print_info(frame=None, fps=0, model_renderer=None):
+    info_y = 30
+    line_height = 30
+    # FPS
+    cv2.putText(frame, f"FPS: {fps:.1f}", (10, info_y), 
+               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+    info_y += line_height
+    # Modo de renderizado
+    mode_text = f"Modo: {'3D-' + args.render_mode if args.use_3d else '2D'}"
+    cv2.putText(frame, mode_text, (10, info_y), 
+               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+    info_y += line_height
+    # Textura activa
+    if model_renderer and args.use_3d:
+        tex_name = model_renderer.texture_renderer.active_texture_name or "unknown"
+        cv2.putText(frame, f"Textura: {tex_name}", (10, info_y), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+        info_y += line_height
+        # NUEVO: Mostrar brillo
+        brightness_text = f"Brillo: {model_renderer.brightness:.2f}"
+        cv2.putText(frame, brightness_text, (10, info_y), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)  # Amarillo
+        info_y += line_height
+    # Ayuda
+    cv2.putText(frame, "Presiona 'H' para ayuda", (10, FRAME_H - 20), 
+               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+    
+def read_keyboard(key, model_renderer=None, has_uvs=False):
+    
+    # En el bucle principal, actualiza los controles:
+    # Cambiar texturas con teclas 1-4
+    if key == ord('1') and model_renderer and "shirt_black" in model_renderer.texture_renderer.list_textures():
+        model_renderer.texture_renderer.set_active_texture("shirt_black")
+        print(f"🎨 Textura: shirt_black")
+    elif key == ord('2') and model_renderer and "shirt_white" in model_renderer.texture_renderer.list_textures():
+        model_renderer.texture_renderer.set_active_texture("shirt_white")
+        print(f"🎨 Textura: shirt_white")
+    #elif key == ord('3') and model_renderer and "shirt_blue" in model_renderer.texture_renderer.list_textures():
+    #    model_renderer.texture_renderer.set_active_texture("shirt_blue")
+    #    print(f"🎨 Textura: shirt_blue")
+    elif key == ord('4') and model_renderer and "shirt_red" in model_renderer.texture_renderer.list_textures():
+        model_renderer.texture_renderer.set_active_texture("shirt_red")
+        print(f"🎨 Textura: shirt_red")
+    elif key == ord('t') and model_renderer and has_uvs:
+        args.render_mode = "textured"
+        model_renderer.set_render_mode("textured")
+        print(f"🎨 Modo: textured")
+    elif key == ord('w') and model_renderer:
+        args.render_mode = "wireframe"
+        model_renderer.set_render_mode("wireframe")
+        print(f"🎨 Modo: wireframe")
+    elif key == ord('v'):
+        if model_renderer:
+            args.use_3d = True
+            print(f"🔄 Modo 3D activado")
+    elif key == ord('u'):
+        args.use_3d = False
+        print(f"🔄 Modo 2D activado")
+    elif key == ord('l'):  # Listar texturas disponibles
+        if model_renderer:
+            textures = model_renderer.texture_renderer.list_textures()
+            print(f"\n📋 Texturas disponibles ({len(textures)}):")
+            for i, tex in enumerate(textures, 1):
+                active = "*" if tex == model_renderer.texture_renderer.active_texture_name else " "
+                print(f"   {i:2}. [{active}] {tex}")
+    elif key == ord('+') or key == ord('='):  # Tecla + o =
+        if model_renderer:
+            model_renderer.increase_brightness(0.05)
+            print(f"💡 Brillo: {model_renderer.brightness:.2f}")
+    
+    elif key == ord('-') or key == ord('_'):  # Tecla -
+        if model_renderer:
+            model_renderer.decrease_brightness(0.05)
+            print(f"💡 Brillo: {model_renderer.brightness:.2f}")
+    
+    elif key == ord('0'):  # Resetear brillo
+        if model_renderer:
+            model_renderer.set_brightness(0.2)
+            print(f"💡 Brillo reseteado: {model_renderer.brightness:.2f}")
+    
+    elif key == ord('h'):  # Mostrar ayuda
+        print("\n" + "="*60)
+        print("🎮 CONTROLES DEL TECLADO")
+        print("="*60)
+        print("TEXTURAS:")
+        print("  1 - Textura negra")
+        print("  2 - Textura blanca")
+        print("  4 - Textura roja")
+        print("\nMODOS DE RENDERIZADO:")
+        print("  T - Modo textured (con texturas)")
+        print("  W - Modo wireframe (alambre)")
+        print("  V - Activar modo 3D")
+        print("  U - Activar modo 2D")
+        print("\nBRILLO:")
+        print("  + / = - Aumentar brillo")
+        print("  -     - Disminuir brillo")
+        print("  0     - Resetear brillo (0.2)")
+        print("\nOTROS:")
+        print("  L     - Listar texturas disponibles")
+        print("  H     - Mostrar esta ayuda")
+        print("  ESC   - Salir")
+        print("="*60 + "\n")
 
 def render_shirt_adaptive(model_renderer, torso_width, torso_height, render_mode):
     """
@@ -390,17 +492,7 @@ def mediaPipeRender():
                         )
 
                 # Mostrar información en pantalla
-                cv2.putText(frame, f"FPS: {fps:.1f}", (10, 30), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-                
-                mode_text = f"Modo: {'3D-' + args.render_mode if args.use_3d else '2D'}"
-                cv2.putText(frame, mode_text, (10, 60), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-                
-                if model_renderer and args.use_3d:
-                    tex_name = model_renderer.texture_renderer.active_texture_name or "unknown"
-                    cv2.putText(frame, f"Textura: {tex_name}", (10, 90), 
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                print_info(frame=frame, fps=fps, model_renderer=model_renderer)
 
                 cv2.imshow("Detección de Pose", frame)
 
@@ -409,43 +501,8 @@ def mediaPipeRender():
 
                 if key == 27:  # ESC
                     break
-                # En el bucle principal, actualiza los controles:
 
-                # Cambiar texturas con teclas 1-4
-                elif key == ord('1') and model_renderer and "shirt_black" in model_renderer.texture_renderer.list_textures():
-                    model_renderer.texture_renderer.set_active_texture("shirt_black")
-                    print(f"🎨 Textura: shirt_black")
-                elif key == ord('2') and model_renderer and "shirt_white" in model_renderer.texture_renderer.list_textures():
-                    model_renderer.texture_renderer.set_active_texture("shirt_white")
-                    print(f"🎨 Textura: shirt_white")
-                #elif key == ord('3') and model_renderer and "shirt_blue" in model_renderer.texture_renderer.list_textures():
-                #    model_renderer.texture_renderer.set_active_texture("shirt_blue")
-                #    print(f"🎨 Textura: shirt_blue")
-                elif key == ord('4') and model_renderer and "shirt_red" in model_renderer.texture_renderer.list_textures():
-                    model_renderer.texture_renderer.set_active_texture("shirt_red")
-                    print(f"🎨 Textura: shirt_red")
-                elif key == ord('t') and model_renderer and has_uvs:
-                    args.render_mode = "textured"
-                    model_renderer.set_render_mode("textured")
-                    print(f"🎨 Modo: textured")
-                elif key == ord('w') and model_renderer:
-                    args.render_mode = "wireframe"
-                    model_renderer.set_render_mode("wireframe")
-                    print(f"🎨 Modo: wireframe")
-                elif key == ord('v'):
-                    if model_renderer:
-                        args.use_3d = True
-                        print(f"🔄 Modo 3D activado")
-                elif key == ord('u'):
-                    args.use_3d = False
-                    print(f"🔄 Modo 2D activado")
-                elif key == ord('l'):  # Listar texturas disponibles
-                    if model_renderer:
-                        textures = model_renderer.texture_renderer.list_textures()
-                        print(f"\n📋 Texturas disponibles ({len(textures)}):")
-                        for i, tex in enumerate(textures, 1):
-                            active = "*" if tex == model_renderer.texture_renderer.active_texture_name else " "
-                            print(f"   {i:2}. [{active}] {tex}")
+                read_keyboard(key, model_renderer=model_renderer, has_uvs=obj_loaded.has_texture_coordinates() if obj_loaded else False)
                     
     except KeyboardInterrupt:
         print("\n🛑 Interrupción por teclado")
@@ -462,6 +519,8 @@ def mediaPipeRender():
         cv2.destroyAllWindows()
         print("✅ Programa finalizado correctamente")
 
+
+    
 def main():
     print("""
     ========================================
