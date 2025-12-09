@@ -22,7 +22,7 @@ def parse_arguments():
     
     parser.add_argument('--render-mode',
             type=str,
-            default='wireframe',
+            default='textured',
             choices=['textured', 'wireframe'],
             help='Modo de renderizado 3D'
         )

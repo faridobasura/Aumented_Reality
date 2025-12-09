@@ -52,6 +52,7 @@ def load_textures(model_renderer, textures_dir):
     texture_files = [
         ("shirt_black", "black_solid.png"),
         ("shirt_white", "white_solid.png"),
+        ("shirt_new_order", "pclShirt_without_CLOTHTEXT.png"),
         ("shirt_red", "red_solid.png"),
     ]
     
@@ -83,7 +84,7 @@ def list_available_textures(textures_dir):
     texture_files = [
         ("shirt_black", "black_solid.png", "Playera negra sólida"),
         ("shirt_white", "white_solid.png", "Playera blanca sólida"),
-       # ("shirt_blue", "blue_solid.png", "Playera azul sólida"),
+        ("shirt_new_order", "pclShirt_without_CLOTHTEXT.png", "Playera New Order"),
         ("shirt_red", "red_solid.png", "Playera roja sólida"),
     ]
     
@@ -154,9 +155,9 @@ def read_keyboard(key, model_renderer=None, has_uvs=False):
     elif key == ord('2') and model_renderer and "shirt_white" in model_renderer.texture_renderer.list_textures():
         model_renderer.texture_renderer.set_active_texture("shirt_white")
         print(f"🎨 Textura: shirt_white")
-    #elif key == ord('3') and model_renderer and "shirt_blue" in model_renderer.texture_renderer.list_textures():
-    #    model_renderer.texture_renderer.set_active_texture("shirt_blue")
-    #    print(f"🎨 Textura: shirt_blue")
+    elif key == ord('3') and model_renderer and "shirt_new_order" in model_renderer.texture_renderer.list_textures():
+        model_renderer.texture_renderer.set_active_texture("shirt_new_order")
+        print(f"🎨 Textura: shirt_new_order")
     elif key == ord('4') and model_renderer and "shirt_red" in model_renderer.texture_renderer.list_textures():
         model_renderer.texture_renderer.set_active_texture("shirt_red")
         print(f"🎨 Textura: shirt_red")
@@ -419,7 +420,7 @@ def mediaPipeRender():
                             right_shoulder_x - left_shoulder_x
                         )) + 180
 
-                        if args.use_3d and model_renderer:
+                        if model_renderer:
                             # MODO 3D
                             if getattr(results, "pose_world_landmarks", None):
                                 pl = results.pose_world_landmarks.landmark
@@ -462,7 +463,7 @@ def mediaPipeRender():
 
                                     if img_3d is not None:
                                         frame = twoD_Render.overlay_transparent(frame, img_3d, x, y)
-                        else:
+                        elif args.use_2d == True:
                             # MODO 2D
                             if shirt_png is not None:
                                 # Usar cache para mejor rendimiento
