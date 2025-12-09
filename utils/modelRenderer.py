@@ -11,7 +11,7 @@ from utils.app_args import args
 from utils.textureRenderer import TextureRenderer
 
 Y_OFFSET = -0.3 
-X_OFFSET = -0.1  
+X_OFFSET = -0.05  
 class ModelRenderer:
     """Clase corregida - solo los métodos que cambian"""
     

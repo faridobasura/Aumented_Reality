@@ -50,8 +50,8 @@ def load_textures(model_renderer, textures_dir):
     
     # SOLO las texturas de archivo que quieres
     texture_files = [
-        ("shirt_black", "black_solid.png"),
-        ("shirt_white", "white_solid.png"),
+        ("shirt_black", "PCL_TEXTURED.png"),
+        ("shirt_white", "pcl_normals.png"),
         ("shirt_new_order", "pclShirt_without_CLOTHTEXT.png"),
         ("shirt_red", "red_solid.png"),
     ]
@@ -82,7 +82,7 @@ def list_available_textures(textures_dir):
     print("=" * 60)
     
     texture_files = [
-        ("shirt_black", "black_solid.png", "Playera negra sólida"),
+        ("shirt_black", "PCL_TEXTURED.png", "Playera negra sólida"),
         ("shirt_white", "white_solid.png", "Playera blanca sólida"),
         ("shirt_new_order", "pclShirt_without_CLOTHTEXT.png", "Playera New Order"),
         ("shirt_red", "red_solid.png", "Playera roja sólida"),
@@ -398,7 +398,7 @@ def mediaPipeRender():
                         torso_width = int(math.sqrt(
                             (right_shoulder_x - left_shoulder_x) ** 2 +
                             (right_shoulder_y - left_shoulder_y) ** 2
-                        ) * 1.7)
+                        ) * 1.9)
 
                         torso_height = int(math.sqrt(
                             (left_hip_x - left_shoulder_x) ** 2 +
