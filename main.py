@@ -20,6 +20,8 @@ SHOULDER_RIGHT = 12
 HIP_LEFT = 23
 HIP_RIGHT = 24
 
+CAMERA_ID = 2
+
 # Rutas de archivos
 shirt_path = os.path.expanduser('~/AR_python/Aumented_Reality/models/Black_T_Shirt_PNG_Clip_Art-3107.png')
 obj_path = os.path.expanduser('~/AR_python/Aumented_Reality/models/obj/new_shirt.obj')
@@ -28,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 mp_pose = mp.solutions.pose
 mp_drawing = mp.solutions.drawing_utils
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(CAMERA_ID)
 
 FRAME_W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 FRAME_H = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -321,9 +323,17 @@ def mediaPipeRender():
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, DESIRED_HEIGHT)
     
     ret, frame = cap.read()
+
     if not ret:
         print("No se pudo capturar imagen inicial")
         return
+
+    # ROTAR CAMARA SI USAMOS LA OTRA CAMARA
+    if CAMERA_ID == 2:
+        frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+
+    # Mostrar el MISMO frame procesado (ya rotado)
+    cv2.imshow("Detección de Pose", frame)
 
     FRAME_H, FRAME_W = frame.shape[:2]
     
@@ -426,15 +436,21 @@ def mediaPipeRender():
             prev_time = cv2.getTickCount()
             fps = 0
             frame_count = 0
-
             while True:
                 ret, frame = cap.read()
                 if not ret:
                     print("Fin del video o no se pudo leer.")
                     break
+                
+                # ROTAR SI USAMOS LA CÁMARA 2
+                if CAMERA_ID == 2:
+                    frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+
+                # Copia para mediapipe
+                frame_mp = frame.copy()
 
                 frame_count += 1
-                h, w = frame.shape[:2]
+                h, w = frame_mp.shape[:2]
 
                 # Calcular FPS
                 current_time = cv2.getTickCount()
@@ -443,7 +459,8 @@ def mediaPipeRender():
                     fps = 1 / time_diff
                 prev_time = current_time
 
-                rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                # Mediapipe procesando el frame rotado
+                rgb = cv2.cvtColor(frame_mp, cv2.COLOR_BGR2RGB)
                 results = pose.process(rgb)
 
                 if results.pose_landmarks:
