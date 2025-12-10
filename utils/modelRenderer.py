@@ -71,7 +71,7 @@ class ModelRenderer:
         self._compile_shaders()
         self._init_gl_objects()
         self._upload_mesh()
-        self._load_default_textures()
+        #self._load_default_textures()
 
     
     def _load_shader_file(self, filepath):
@@ -514,8 +514,47 @@ class ModelRenderer:
         # Calcular tangentes
         tangents = self._calculate_tangents(tri_verts_arr, tri_uvs_arr, tri_normals_arr)
         
+        tri_normals_arr = np.array(tri_normals, dtype=np.float32)
+    
+        # 🔧 NUEVO: Suavizar normales - promedia normales vecinas
+        tri_normals_arr = self._smooth_normals(tri_normals_arr)
+
+        # Calcular tangentes
+        tangents = self._calculate_tangents(tri_verts_arr, tri_uvs_arr, tri_normals_arr)
+
         return tri_verts_arr, tri_uvs_arr, tri_normals_arr, tangents
     
+    def _smooth_normals(self, normals, iterations=5):
+        """Suaviza normales para evitar artefactos de iluminación"""
+        smoothed = normals.copy()
+
+        num_triangles = len(normals) // 3
+
+        for _ in range(iterations):
+            temp = smoothed.copy()
+
+            # Para cada triángulo, promediar sus normales con las de triángulos vecinos
+            for i in range(num_triangles):
+                idx = i * 3
+
+                # Promediar los 3 vértices del triángulo
+                avg_normal = (smoothed[idx] + smoothed[idx+1] + smoothed[idx+2]) / 3.0
+                avg_normal = avg_normal / np.linalg.norm(avg_normal)
+
+                # Asignar el promedio a los 3 vértices
+                temp[idx] = avg_normal
+                temp[idx+1] = avg_normal
+                temp[idx+2] = avg_normal
+
+            smoothed = temp
+
+        # Normalizar todas las normales
+        for i in range(len(smoothed)):
+            length = np.linalg.norm(smoothed[i])
+            if length > 0:
+                smoothed[i] = smoothed[i] / length
+
+        return smoothed
     def _calculate_tangents(self, vertices, uvs, normals):
         """Calcula tangentes para normal mapping usando el algoritmo MikkT space simplificado"""
         num_triangles = len(vertices) // 3

@@ -42,18 +42,20 @@ void main()
         // Vector de dirección de luz
         vec3 lightDir = normalize(lightPos - FragPos);
         
-        // Difuso (Lambert)
+        // Difuso (Lambert) - SUAVIZADO
         float diff = max(dot(normal, lightDir), 0.0);
-        vec3 diffuse = vec3(0.7) * diff;
+        // Suavizar con smoothstep para evitar cambios abruptos
+        diff = smoothstep(0.0, 1.0, diff);
+        vec3 diffuse = vec3(0.4) * diff;
         
-        // Especular (Blinn-Phong)
+        // Especular (Blinn-Phong) - REDUCIDO
         vec3 viewDir = normalize(viewPos - FragPos);
         vec3 halfDir = normalize(lightDir + viewDir);
-        float spec = pow(max(dot(normal, halfDir), 0.0), 32.0);
-        vec3 specular = vec3(0.3) * spec;
+        float spec = pow(max(dot(normal, halfDir), 0.0), 16.0);
+        vec3 specular = vec3(0.15) * spec;
         
-        // Luz ambiental
-        vec3 ambient = vec3(0.3);
+        // Luz ambiental - AUMENTADA para evitar áreas muy oscuras
+        vec3 ambient = vec3(0.73);
         
         // Combinar todas las luces
         vec3 lighting = ambient + diffuse + specular;
@@ -72,4 +74,3 @@ void main()
         FragColor = vec4(0.7, 0.7, 0.7, 1.0);
     }
 }
-

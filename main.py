@@ -46,13 +46,17 @@ def load_textures(model_renderer, textures_dir):
     textures_loaded = []
     
     print(f"\n🎨 Cargando texturas desde archivos...")
+
+    img_path = os.path.join(textures_dir, "white_solid.png")
+    img = cv2.imread(img_path)
+    print(f"Color promedio: {img.mean(axis=(0,1))}")
     print(f"   Directorio: {textures_dir}")
     
     # Definir pares de texturas (nombre, difusa, normal)
     # NOMBRE_ARCHIVO_NORMAL = mismo_nombre + "_normal.png"
     texture_pairs = [
         ("new_shirt", "new_shirt_bake_diffuse.png", "new_shirt_bake_normals.png"),
-        ("new_shirt_shadows", "new_shirt_bake_shadows.png", "new_shirt_bake_normals.png"),
+        ("new_shirt_shadows", "white_solid.png", "new_shirt_bake_normals.png"),
         ("shirt_new_order", "pclShirt_without_CLOTHTEXT.png", "new_shirt_bake_normals.png"),
         ("shirt_combined", "bake_combined.png", "new_shirt_bake_normals.png"),
     ]
@@ -257,7 +261,7 @@ def read_keyboard(key, model_renderer=None, has_uvs=False):
     
     elif key == ord('0'):  # Resetear brillo
         if model_renderer:
-            model_renderer.set_brightness(0.2)
+            model_renderer.set_brightness(0.6)
             print(f"💡 Brillo reseteado: {model_renderer.brightness:.2f}")
     
     elif key == ord('h'):  # Mostrar ayuda
@@ -339,6 +343,10 @@ def mediaPipeRender():
     try:
         print(f"\n📦 Cargando modelo 3D desde: {obj_path}")
         obj_loaded = ObjModel.load_obj(obj_path)
+
+        print("Primeros 10 UVs:")
+        for i in range(min(10, len(obj_loaded.uvs))):
+            print(f"  UV {i}: {obj_loaded.uvs[i]}")
         
         if obj_loaded is not None:
             # Verificar si el modelo tiene coordenadas UV
