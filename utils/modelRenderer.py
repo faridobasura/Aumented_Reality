@@ -11,7 +11,7 @@ from utils.app_args import args
 from utils.textureRenderer import TextureRenderer
 
 Y_OFFSET = -0.3 
-X_OFFSET = -0.05  
+X_OFFSET = -0.1  
 class ModelRenderer:
     """Clase corregida - solo los métodos que cambian"""
     
@@ -22,11 +22,20 @@ class ModelRenderer:
         self.obj_model = obj
         self.vertex_count = 0
         
+        #For t-shirt model
+        #self.ANCHOR_VERTEX_IDS = {
+        #    "right_shoulder": 2557,
+        #    "left_shoulder": 2854,
+        #    "right_hip": 2511,
+        #    "left_hip": 3275,
+        #}
+
+        #Foir new tshirt model
         self.ANCHOR_VERTEX_IDS = {
-            "right_shoulder": 2557,
-            "left_shoulder": 2854,
-            "right_hip": 2511,
-            "left_hip": 3275,
+            "right_shoulder": 41191,
+            "left_shoulder": 25,
+            "right_hip": 7178,
+            "left_hip": 41258,
         }
         
         # Transformaciones
@@ -119,6 +128,13 @@ class ModelRenderer:
         self.proj_loc = glGetUniformLocation(self.shader_program, "projection")
         self.use_texture_loc = glGetUniformLocation(self.shader_program, "useTexture")
         self.brightness_loc = glGetUniformLocation(self.shader_program, "brightness")
+
+        self.light_pos_loc = glGetUniformLocation(self.shader_program, "lightPos")
+        self.view_pos_loc = glGetUniformLocation(self.shader_program, "viewPos")
+        self.use_normal_map_loc = glGetUniformLocation(self.shader_program, "useNormalMap")
+        self.normal_strength_loc = glGetUniformLocation(self.shader_program, "normalStrength")
+        self.color_texture_loc = glGetUniformLocation(self.shader_program, "colorTexture")
+        self.normal_texture_loc = glGetUniformLocation(self.shader_program, "normalTexture")
     
         
         print("✅ Shaders principales compilados con soporte para texturas")
@@ -198,19 +214,57 @@ class ModelRenderer:
         print(f"✅ Contexto OpenGL creado")
 
     def _load_default_textures(self):
-        """Carga texturas iniciales"""
-
-        # Cargar textura de camiseta si existe
-        texture_path = os.path.expanduser('~/AR_python/Aumented_Reality/models/textures/white_solid.png')
+        """Carga texturas iniciales (difusas + normales)"""
+        textures_dir = os.path.expanduser('~/AR_python/Aumented_Reality/models/textures/')
+        
+        # Solo cargar textura básica por compatibilidad
+        texture_path = os.path.join(textures_dir, "white_solid.png")
+        normal_path = os.path.join(textures_dir, "white_solid_normal.png")
+        
         if os.path.exists(texture_path):
-            if self.texture_renderer.load_texture("t_shirt", texture_path):
-                print(f"✅ Textura de camiseta cargada: {texture_path}")
+            # Cargar textura difusa
+            if self.texture_renderer.load_texture("t_shirt", texture_path, "diffuse"):
+                print(f"✅ Textura difusa 't_shirt' cargada")
+                
+                # Intentar cargar textura normal
+                if os.path.exists(normal_path):
+                    if self.texture_renderer.load_texture("t_shirt", normal_path, "normal"):
+                        print(f"🌟 Mapa de normales 't_shirt' cargado")
+                else:
+                    print(f"⚠️  Mapa de normales no encontrado para 't_shirt'")
+                
                 self.texture_renderer.set_active_texture("t_shirt")
             else:
                 print(f"⚠️ No se pudo cargar textura: {texture_path}")
         else:
             print(f"⚠️ No se encontró textura en: {texture_path}")
     
+    def load_texture_pair(self, name: str, diffuse_path: str, normal_path: str = None) -> bool:
+        """Carga un par de texturas (difusa + normal)"""
+        success = self.texture_renderer.load_texture_pair(name, diffuse_path, normal_path)
+        if success:
+            print(f"✅ Textura '{name}' cargada:")
+            print(f"   Difusa: {diffuse_path}")
+            if normal_path:
+                print(f"   Normal: {normal_path}")
+
+            # Activar esta textura si es la primera
+            if not self.texture_renderer.active_texture_name:
+                self.texture_renderer.set_active_texture(name)
+        return success
+
+    def set_texture(self, texture_name: str) -> bool:
+        """Establece la textura activa"""
+        success = self.texture_renderer.set_active_texture(texture_name)
+        if success and self.render_mode != "textured":
+            self.set_render_mode("textured")
+        
+        # Actualizar estado de normal mapping
+        if success and self.texture_renderer.has_normal_map():
+            print(f"🌟 Textura '{texture_name}' tiene mapa de normales")
+        
+        return success
+        
     def _calculate_shoulder_distance(self):
         """Calcula distancia entre hombros"""
         if self.obj_model is None:
@@ -230,7 +284,7 @@ class ModelRenderer:
         distance = np.linalg.norm(right - left)
     
         # Si la distancia es muy pequeña, escalar el modelo
-        SCALE_FACTOR = 1.5  # Aumentar este valor para hacer el modelo más grande
+        SCALE_FACTOR = 1.35  # Aumentar este valor para hacer el modelo más grande
         if distance < 0.3:  # Si es menor a 30cm en espacio 3D
             distance *= SCALE_FACTOR
             print(f"⚠️  Modelo muy pequeño, escalando por {SCALE_FACTOR}")
@@ -343,113 +397,251 @@ class ModelRenderer:
             return
 
         # Expandir caras para obtener posiciones y UVs
-        if self.obj_model.has_texture_coordinates():
+        if self.obj_model.has_texture_coordinates() and self.obj_model.has_normals():
+            positions, tex_coords, normals, tangents = self._expand_faces_with_uvs_normals_tangents()
+            has_normals_and_tangents = True
+        elif self.obj_model.has_texture_coordinates():
             positions, tex_coords = self._expand_faces_with_uvs()
+            normals = self._generate_flat_normals(positions)
+            tangents = self._generate_tangents(positions, tex_coords)
+            has_normals_and_tangents = True
         else:
             positions = self._expand_faces()
-            tex_coords = np.zeros((len(positions), 2), dtype=np.float32)  # UVs por defecto
-        
+            tex_coords = np.zeros((len(positions), 2), dtype=np.float32)
+            normals = self._generate_flat_normals(positions)
+            tangents = self._generate_tangents(positions, tex_coords)
+            has_normals_and_tangents = True
+
         self.vertex_count = len(positions)
         
-        # Intercalar posiciones y coordenadas UV
-        # Formato: [x, y, z, u, v]
-        interleaved = np.zeros((self.vertex_count, 5), dtype=np.float32)
-        interleaved[:, 0:3] = positions  # Posiciones (x, y, z)
-        interleaved[:, 3:5] = tex_coords  # Coordenadas UV (u, v)
-        
+        # Intercalar posiciones, UVs, normales y tangentes
+        # Formato: [x, y, z, u, v, nx, ny, nz, tx, ty, tz]
+        interleaved = np.zeros((self.vertex_count, 11), dtype=np.float32)
+        interleaved[:, 0:3] = positions      # Posiciones (x, y, z)
+        interleaved[:, 3:5] = tex_coords     # Coordenadas UV (u, v)
+        interleaved[:, 5:8] = normals        # Normales (nx, ny, nz)
+        interleaved[:, 8:11] = tangents      # Tangentes (tx, ty, tz)
+
         # Aplanar el array
         vertex_data = interleaved.flatten()
-        
+
         # VAO/VBO
         self.vao = glGenVertexArrays(1)
         glBindVertexArray(self.vao)
-        
+
         self.vbo = glGenBuffers(1)
         glBindBuffer(GL_ARRAY_BUFFER, self.vbo)
         glBufferData(GL_ARRAY_BUFFER, vertex_data.nbytes, vertex_data, GL_STATIC_DRAW)
-        
-        # STRIDE = 5 floats * 4 bytes cada uno = 20 bytes
-        stride = 5 * 4
-        
+
+        # STRIDE = 11 floats * 4 bytes cada uno = 44 bytes
+        stride = 11 * 4
+
         # Atributo 0: posición (3 floats)
         glEnableVertexAttribArray(0)
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, None)
-        
+
         # Atributo 1: coordenadas UV (2 floats) - offset 12 bytes
         glEnableVertexAttribArray(1)
         glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(12))
-        
+
+        # Atributo 2: normales (3 floats) - offset 20 bytes
+        glEnableVertexAttribArray(2)
+        glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(20))
+
+        # Atributo 3: tangentes (3 floats) - offset 32 bytes
+        glEnableVertexAttribArray(3)
+        glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(32))
+
         glBindVertexArray(0)
-        
+
         print(f"✅ Malla subida a GPU: {self.vertex_count} vértices")
         if self.obj_model.has_texture_coordinates():
             print(f"   Incluye coordenadas UV para texturas")
+        if has_normals_and_tangents:
+            print(f"   Incluye normales y tangentes para normal mapping")
 
-    def _expand_faces_with_uvs(self):
-        """Convierte caras a triángulos con coordenadas UV"""
+    def _expand_faces_with_uvs_normals_tangents(self):
+        """Convierte caras a triángulos con coordenadas UV, normales y tangentes"""
         tri_verts = []
         tri_uvs = []
+        tri_normals = []
         
-        for face, face_uv in zip(self.obj_model.faces, self.obj_model.face_uvs):
+        # Primero, expandir caras con UVs y normales
+        for face, face_uv, face_norm in zip(self.obj_model.faces, 
+                                             self.obj_model.face_uvs, 
+                                             self.obj_model.face_normals):
             if len(face) == 3:
-                # Triángulo simple
                 for i in range(3):
                     vertex_idx = face[i]
                     uv_idx = face_uv[i] if i < len(face_uv) and face_uv[i] >= 0 else 0
+                    norm_idx = face_norm[i] if i < len(face_norm) and face_norm[i] >= 0 else 0
                     
                     tri_verts.append(self.obj_model.vertices[vertex_idx])
+                    
                     if uv_idx >= 0 and uv_idx < len(self.obj_model.uvs):
                         tri_uvs.append(self.obj_model.uvs[uv_idx])
                     else:
                         tri_uvs.append([0.0, 0.0])
+                    
+                    if norm_idx >= 0 and norm_idx < len(self.obj_model.normals):
+                        tri_normals.append(self.obj_model.normals[norm_idx])
+                    else:
+                        tri_normals.append([0.0, 0.0, 1.0])
             
             elif len(face) == 4:
                 # Cuadrilátero - dividir en 2 triángulos
-                # Triángulo 1: v0, v1, v2
-                for i in [0, 1, 2]:
+                for i in [0, 1, 2, 0, 2, 3]:  # Dos triángulos
                     vertex_idx = face[i]
                     uv_idx = face_uv[i] if i < len(face_uv) and face_uv[i] >= 0 else 0
+                    norm_idx = face_norm[i] if i < len(face_norm) and face_norm[i] >= 0 else 0
                     
                     tri_verts.append(self.obj_model.vertices[vertex_idx])
+                    
                     if uv_idx >= 0 and uv_idx < len(self.obj_model.uvs):
                         tri_uvs.append(self.obj_model.uvs[uv_idx])
                     else:
                         tri_uvs.append([0.0, 0.0])
-                
-                # Triángulo 2: v0, v2, v3
-                for i in [0, 2, 3]:
-                    vertex_idx = face[i]
-                    uv_idx = face_uv[i] if i < len(face_uv) and face_uv[i] >= 0 else 0
                     
-                    tri_verts.append(self.obj_model.vertices[vertex_idx])
-                    if uv_idx >= 0 and uv_idx < len(self.obj_model.uvs):
-                        tri_uvs.append(self.obj_model.uvs[uv_idx])
+                    if norm_idx >= 0 and norm_idx < len(self.obj_model.normals):
+                        tri_normals.append(self.obj_model.normals[norm_idx])
                     else:
-                        tri_uvs.append([0.0, 0.0])
+                        tri_normals.append([0.0, 0.0, 1.0])
         
-        return np.array(tri_verts, dtype=np.float32), np.array(tri_uvs, dtype=np.float32)
+        tri_verts_arr = np.array(tri_verts, dtype=np.float32)
+        tri_uvs_arr = np.array(tri_uvs, dtype=np.float32)
+        tri_normals_arr = np.array(tri_normals, dtype=np.float32)
+        
+        # Calcular tangentes
+        tangents = self._calculate_tangents(tri_verts_arr, tri_uvs_arr, tri_normals_arr)
+        
+        return tri_verts_arr, tri_uvs_arr, tri_normals_arr, tangents
     
-    def _expand_faces(self):
-        """Convierte caras a triángulos (sin UVs)"""
-        tri_verts = []
-        for face in self.obj_model.faces:
-            if len(face) == 3:
-                tri_verts.extend([
-                    self.obj_model.vertices[face[0]],
-                    self.obj_model.vertices[face[1]],
-                    self.obj_model.vertices[face[2]]
+    def _calculate_tangents(self, vertices, uvs, normals):
+        """Calcula tangentes para normal mapping usando el algoritmo MikkT space simplificado"""
+        num_triangles = len(vertices) // 3
+        tangents = np.zeros((len(vertices), 3), dtype=np.float32)
+
+        for i in range(num_triangles):
+            idx = i * 3
+
+            v0 = vertices[idx]
+            v1 = vertices[idx + 1]
+            v2 = vertices[idx + 2]
+
+            uv0 = uvs[idx]
+            uv1 = uvs[idx + 1]
+            uv2 = uvs[idx + 2]
+
+            # Vectores de arista
+            edge1 = v1 - v0
+            edge2 = v2 - v0
+
+            # Diferencias de UV
+            delta_uv1 = uv1 - uv0
+            delta_uv2 = uv2 - uv0
+
+            # Calcular tangente y bitangente
+            denom = delta_uv1[0] * delta_uv2[1] - delta_uv2[0] * delta_uv1[1]
+
+            # Evitar división por cero
+            if abs(denom) < 1e-8:
+                # Usar tangente por defecto
+                tangent = np.array([1.0, 0.0, 0.0])
+                bitangent = np.array([0.0, 1.0, 0.0])
+            else:
+                f = 1.0 / denom
+
+                tangent = np.array([
+                    f * (delta_uv2[1] * edge1[0] - delta_uv1[1] * edge2[0]),
+                    f * (delta_uv2[1] * edge1[1] - delta_uv1[1] * edge2[1]),
+                    f * (delta_uv2[1] * edge1[2] - delta_uv1[1] * edge2[2])
                 ])
-            elif len(face) == 4:
-                tri_verts.extend([
-                    self.obj_model.vertices[face[0]],
-                    self.obj_model.vertices[face[1]],
-                    self.obj_model.vertices[face[2]],
-                    self.obj_model.vertices[face[0]],
-                    self.obj_model.vertices[face[2]],
-                    self.obj_model.vertices[face[3]]
+
+                bitangent = np.array([
+                    f * (-delta_uv2[0] * edge1[0] + delta_uv1[0] * edge2[0]),
+                    f * (-delta_uv2[0] * edge1[1] + delta_uv1[0] * edge2[1]),
+                    f * (-delta_uv2[0] * edge1[2] + delta_uv1[0] * edge2[2])
                 ])
-        
-        return np.array(tri_verts, dtype=np.float32).reshape(-1, 3)
+
+            # Ortogonalización de Gram-Schmidt
+            for j in range(3):
+                vertex_idx = idx + j
+                normal = normals[vertex_idx]
+
+                # Proyectar tangente en el plano perpendicular a la normal
+                t = tangent - normal * np.dot(normal, tangent)
+
+                # Normalizar o usar tangente por defecto
+                t_norm = np.linalg.norm(t)
+                if t_norm > 1e-8:
+                    t = t / t_norm
+                else:
+                    t = np.array([1.0, 0.0, 0.0])
+
+                tangents[vertex_idx] = t
+
+        return tangents
+    def _generate_flat_normals(self, vertices):
+        """Genera normales planas si el modelo no las tiene"""
+        num_triangles = len(vertices) // 3
+        normals = np.zeros((len(vertices), 3), dtype=np.float32)
+
+        for i in range(num_triangles):
+            idx = i * 3
+
+            v0 = vertices[idx]
+            v1 = vertices[idx + 1]
+            v2 = vertices[idx + 2]
+
+            # Calcular normal del triángulo
+            edge1 = v1 - v0
+            edge2 = v2 - v0
+            normal = np.cross(edge1, edge2)
+            normal_len = np.linalg.norm(normal)
+
+            if normal_len > 0:
+                normal = normal / normal_len
+            else:
+                normal = np.array([0.0, 0.0, 1.0])
+
+            # Asignar la misma normal a los 3 vértices del triángulo
+            normals[idx] = normal
+            normals[idx + 1] = normal
+            normals[idx + 2] = normal
+
+        return normals
+
+    def _generate_tangents(self, vertices, uvs):
+        """Genera tangentes básicas si no hay UVs adecuadas"""
+        num_vertices = len(vertices)
+        tangents = np.zeros((num_vertices, 3), dtype=np.float32)
+
+        # Tangente por defecto (eje X)
+        tangents[:] = [1.0, 0.0, 0.0]
+
+        return tangents
+
+        def _expand_faces(self):
+            """Convierte caras a triángulos (sin UVs)"""
+            tri_verts = []
+            for face in self.obj_model.faces:
+                if len(face) == 3:
+                    tri_verts.extend([
+                        self.obj_model.vertices[face[0]],
+                        self.obj_model.vertices[face[1]],
+                        self.obj_model.vertices[face[2]]
+                    ])
+                elif len(face) == 4:
+                    tri_verts.extend([
+                        self.obj_model.vertices[face[0]],
+                        self.obj_model.vertices[face[1]],
+                        self.obj_model.vertices[face[2]],
+                        self.obj_model.vertices[face[0]],
+                        self.obj_model.vertices[face[2]],
+                        self.obj_model.vertices[face[3]]
+                    ])
+
+            return np.array(tri_verts, dtype=np.float32).reshape(-1, 3)
 
     def _apply_transform(self):
         if self.model_translation.ndim > 1:
@@ -504,7 +696,7 @@ class ModelRenderer:
         
     
     def _draw_model(self):
-        """Dibuja el modelo con shaders y texturas"""
+        """Dibuja el modelo con shaders, texturas y normal mapping"""
         glUseProgram(self.shader_program)
 
         # Pasar matrices a shaders
@@ -513,21 +705,46 @@ class ModelRenderer:
             glUniformMatrix4fv(self.view_loc, 1, GL_FALSE, self.view_matrix.T)
             glUniformMatrix4fv(self.proj_loc, 1, GL_FALSE, self.proj_matrix.T)
 
-        # Configurar si usar textura
+        # Configurar si usar textura y normal map
         use_texture = (self.render_mode == "textured" and 
                       self.obj_model.has_texture_coordinates())
         glUniform1i(self.use_texture_loc, 1 if use_texture else 0)
 
-        # NUEVO: Pasar valor de brightness al shader
+        # Verificar si hay mapa de normales disponible
+        has_normal_map = (use_texture and 
+                         self.texture_renderer.has_normal_map())
+
+        # Configurar normal mapping
+        glUniform1i(self.use_normal_map_loc, 1 if has_normal_map else 0)
+        glUniform1f(self.normal_strength_loc, 0.6)  # Intensidad completa por defecto
+
+        # Pasar brillo
         if hasattr(self, 'brightness_loc') and self.brightness_loc != -1:
             glUniform1f(self.brightness_loc, self.brightness)
 
-        # Vincular textura si es necesario
+        # Posiciones para iluminación
+        light_pos = [0.0, 2.0, 2.0]  # Luz arriba y a la derecha
+        view_pos = [0.0, 0.0, 3.0]   # Posición de cámara
+
+        if self.light_pos_loc != -1:
+            glUniform3fv(self.light_pos_loc, 1, light_pos)
+        if self.view_pos_loc != -1:
+            glUniform3fv(self.view_pos_loc, 1, view_pos)
+
+        # Vincular texturas
         if use_texture:
-            self.texture_renderer.bind_active_texture()
-            glUniform1i(glGetUniformLocation(self.shader_program, "textureSampler"), 0)
+            # Vincular TODAS las texturas activas
+            self.texture_renderer.bind_active_textures()
+
+            # Pasar ubicaciones de textura al shader
+            glUniform1i(self.color_texture_loc, 0)  # Textura difusa en unidad 0
+
+            # Si hay mapa de normales, pasar su ubicación
+            if has_normal_map and self.normal_texture_loc != -1:
+                glUniform1i(self.normal_texture_loc, 1)  # Textura normal en unidad 1
+                print(f"🔧 Usando mapa de normales para '{self.texture_renderer.active_texture_name}'")
         else:
-            self.texture_renderer.unbind_texture()
+            self.texture_renderer.unbind_textures()
 
         glBindVertexArray(self.vao)
 
@@ -543,9 +760,9 @@ class ModelRenderer:
         # Limpiar
         glBindVertexArray(0)
         if use_texture:
-            self.texture_renderer.unbind_texture()
+            self.texture_renderer.unbind_textures()
         glUseProgram(0)
-    
+
     def render_to_image(self):
         """Renderiza a imagen usando shaders"""
         glBindFramebuffer(GL_FRAMEBUFFER, self.fbo)

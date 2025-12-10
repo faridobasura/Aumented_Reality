@@ -1,40 +1,75 @@
 #version 330 core
 in vec2 TexCoord;
+in vec3 FragPos;
+in vec3 Normal;
+in mat3 TBN;  // Tangent-Bitangent-Normal matrix
+
 out vec4 FragColor;
 
-uniform sampler2D textureSampler;
+uniform sampler2D colorTexture;
+uniform sampler2D normalTexture;
 uniform bool useTexture;
-uniform float brightness;  // Control de brillo desde Python (0.0 - 1.0)
+uniform bool useNormalMap;
+uniform float brightness;
+uniform vec3 lightPos;      // Posición de la luz
+uniform vec3 viewPos;       // Posición de la cámara
+uniform float normalStrength; // Intensidad del normal map (0.0 - 1.0)
 
 void main()
 {
     if (useTexture) {
-        // Obtener color de la textura
-        vec4 texColor = texture(textureSampler, TexCoord);
+        // ===== OBTENER COLORES =====
+        vec4 baseColor = texture(colorTexture, TexCoord);
         
-        // ===== ILUMINACIÓN CONFIGURABLE =====
+        // ===== NORMAL MAPPING =====
+        vec3 normal = Normal;
         
-        // 1. Luz ambiental base (siempre presente)
-        vec3 ambientLight = vec3(0.3, 0.3, 0.3);
+        if (useNormalMap) {
+            // Obtener el normal del mapa (rango 0-1, convertir a -1 a 1)
+            vec3 sampledNormal = texture(normalTexture, TexCoord).rgb;
+            sampledNormal = normalize(sampledNormal * 2.0 - 1.0);
+            
+            // Convertir a espacio mundial usando TBN
+            sampledNormal = normalize(TBN * sampledNormal);
+            
+            // Interpolar entre normal original y normal mapeado
+            normal = mix(Normal, sampledNormal, normalStrength);
+            normal = normalize(normal);
+        }
         
-        // 2. Luz direccional (simula luz desde el frente)
-        vec3 directionalLight = vec3(0.5, 0.5, 0.5);
+        // ===== CÁLCULOS DE ILUMINACIÓN =====
         
-        // 3. Combinar luces
-        vec3 totalLight = ambientLight + directionalLight;
+        // Vector de dirección de luz
+        vec3 lightDir = normalize(lightPos - FragPos);
         
-        // 4. Aplicar iluminación a la textura
-        vec3 litColor = texColor.rgb * totalLight;
+        // Difuso (Lambert)
+        float diff = max(dot(normal, lightDir), 0.0);
+        vec3 diffuse = vec3(0.7) * diff;
         
-        // 5. Agregar brillo adicional ajustable (desde Python)
+        // Especular (Blinn-Phong)
+        vec3 viewDir = normalize(viewPos - FragPos);
+        vec3 halfDir = normalize(lightDir + viewDir);
+        float spec = pow(max(dot(normal, halfDir), 0.0), 32.0);
+        vec3 specular = vec3(0.3) * spec;
+        
+        // Luz ambiental
+        vec3 ambient = vec3(0.3);
+        
+        // Combinar todas las luces
+        vec3 lighting = ambient + diffuse + specular;
+        
+        // Aplicar iluminación al color base
+        vec3 litColor = baseColor.rgb * lighting;
+        
+        // Agregar brillo ajustable
         litColor += vec3(brightness);
         
-        // 6. Clamp para evitar valores fuera de rango
+        // Clamp para evitar valores fuera de rango
         litColor = clamp(litColor, 0.0, 1.0);
         
-        FragColor = vec4(litColor, texColor.a);
+        FragColor = vec4(litColor, baseColor.a);
     } else {
-        // Modo wireframe/sin textura
         FragColor = vec4(0.7, 0.7, 0.7, 1.0);
     }
 }
+

@@ -1,0 +1,402 @@
+# Blender 5.0.0 MTL File: 'new_shirt.blend'
+# www.blender.org
+
+newmtl Knit_Fleece_Terry_Copy_1_FRONT_109203.096
+Ns 287.632416
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/Program Files/CLO Standalone OnlineAuth/FCL1-PSK002-00_DIFFUSE.jpg
+map_Bump -bm 1.000000 /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/Program Files/CLO Standalone OnlineAuth/FCL1-PSK002-00_NORMAL.jpg
+
+newmtl Knit_Fleece_Terry_Copy_1_FRONT_109203.097
+Ns 287.632416
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_DIFFUSE.jpg
+map_Bump -bm 1.000000 /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_NORMAL.jpg
+
+newmtl Knit_Fleece_Terry_Copy_1_FRONT_109203.098
+Ns 287.632416
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_DIFFUSE.jpg
+map_Bump -bm 1.000000 /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_NORMAL.jpg
+
+newmtl Knit_Fleece_Terry_Copy_1_FRONT_109203.099
+Ns 287.632416
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_DIFFUSE.jpg
+map_Bump -bm 1.000000 /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_NORMAL.jpg
+
+newmtl Knit_Fleece_Terry_Copy_1_FRONT_109203.100
+Ns 287.632416
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_DIFFUSE.jpg
+map_Bump -bm 1.000000 /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_NORMAL.jpg
+
+newmtl Knit_Fleece_Terry_Copy_1_FRONT_109203.101
+Ns 287.632416
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_DIFFUSE.jpg
+map_Bump -bm 1.000000 /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/Program Files/CLO Standalone OnlineAuth/FCL1-PSK002-00_NORMAL.jpg
+
+newmtl Knit_Fleece_Terry_Copy_1_FRONT_109203.102
+Ns 287.632416
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_DIFFUSE.jpg
+map_Bump -bm 1.000000 /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_NORMAL.jpg
+
+newmtl Knit_Fleece_Terry_Copy_1_FRONT_109203.103
+Ns 287.632416
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_DIFFUSE.jpg
+map_Bump -bm 1.000000 /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_NORMAL.jpg
+
+newmtl Knit_Fleece_Terry_Copy_1_FRONT_109203.104
+Ns 287.632416
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_DIFFUSE.jpg
+map_Bump -bm 1.000000 /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_NORMAL.jpg
+
+newmtl Knit_Fleece_Terry_Copy_1_FRONT_109203.105
+Ns 287.632416
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_DIFFUSE.jpg
+map_Bump -bm 1.000000 /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_NORMAL.jpg
+
+newmtl Knit_Fleece_Terry_Copy_1_FRONT_109203.106
+Ns 287.632416
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_DIFFUSE.jpg
+map_Bump -bm 1.000000 /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/Program Files/CLO Standalone OnlineAuth/FCL1-PSK002-00_NORMAL.jpg
+
+newmtl Knit_Fleece_Terry_Copy_1_FRONT_109203.107
+Ns 287.632416
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_DIFFUSE.jpg
+map_Bump -bm 1.000000 /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/Program Files/CLO Standalone OnlineAuth/FCL1-PSK002-00_NORMAL.jpg
+
+newmtl Knit_Fleece_Terry_FRONT_109192.143
+Ns 287.632416
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_DIFFUSE.jpg
+map_Bump -bm 1.000000 /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_NORMAL.jpg
+
+newmtl Knit_Fleece_Terry_FRONT_109192.144
+Ns 287.632416
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_DIFFUSE.jpg
+map_Bump -bm 1.000000 /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_NORMAL.jpg
+
+newmtl Knit_Fleece_Terry_FRONT_109192.145
+Ns 287.632416
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_DIFFUSE.jpg
+map_Bump -bm 1.000000 /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_NORMAL.jpg
+
+newmtl Knit_Fleece_Terry_FRONT_109192.146
+Ns 287.632416
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_DIFFUSE.jpg
+map_Bump -bm 1.000000 /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_NORMAL.jpg
+
+newmtl Knit_Fleece_Terry_FRONT_109192.147
+Ns 287.632416
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_DIFFUSE.jpg
+map_Bump -bm 1.000000 /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_NORMAL.jpg
+
+newmtl Knit_Fleece_Terry_FRONT_109192.148
+Ns 287.632416
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_DIFFUSE.jpg
+map_Bump -bm 1.000000 /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_NORMAL.jpg
+
+newmtl Knit_Fleece_Terry_FRONT_109192.149
+Ns 287.632416
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_DIFFUSE.jpg
+map_Bump -bm 1.000000 /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_NORMAL.jpg
+
+newmtl Knit_Fleece_Terry_FRONT_109192.150
+Ns 287.632416
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_DIFFUSE.jpg
+map_Bump -bm 1.000000 /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_NORMAL.jpg
+
+newmtl Knit_Fleece_Terry_FRONT_109192.151
+Ns 287.632416
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_DIFFUSE.jpg
+map_Bump -bm 1.000000 /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_NORMAL.jpg
+
+newmtl Knit_Fleece_Terry_FRONT_109192.152
+Ns 287.632416
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_DIFFUSE.jpg
+map_Bump -bm 1.000000 /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_NORMAL.jpg
+
+newmtl Knit_Fleece_Terry_FRONT_109192.153
+Ns 287.632416
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_DIFFUSE.jpg
+map_Bump -bm 1.000000 /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_NORMAL.jpg
+
+newmtl Knit_Fleece_Terry_FRONT_109192.154
+Ns 287.632416
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_DIFFUSE.jpg
+map_Bump -bm 1.000000 /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_NORMAL.jpg
+
+newmtl Knit_Fleece_Terry_FRONT_109192.155
+Ns 287.632416
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_DIFFUSE.jpg
+map_Bump -bm 1.000000 /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_NORMAL.jpg
+
+newmtl Knit_Fleece_Terry_FRONT_109192.156
+Ns 287.632416
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_DIFFUSE.jpg
+map_Bump -bm 1.000000 /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_NORMAL.jpg
+
+newmtl Knit_Fleece_Terry_FRONT_109192.157
+Ns 287.632416
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_DIFFUSE.jpg
+map_Bump -bm 1.000000 /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_NORMAL.jpg
+
+newmtl Knit_Fleece_Terry_FRONT_109192.158
+Ns 287.632416
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/Program Files/CLO Standalone OnlineAuth/FCL1-PSK002-00_DIFFUSE.jpg
+map_Bump -bm 1.000000 /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/Program Files/CLO Standalone OnlineAuth/FCL1-PSK002-00_NORMAL.jpg
+
+newmtl Knit_Fleece_Terry_FRONT_109192.159
+Ns 287.632416
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_DIFFUSE.jpg
+map_Bump -bm 1.000000 /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_NORMAL.jpg
+
+newmtl Knit_Fleece_Terry_FRONT_109192.160
+Ns 287.632416
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_DIFFUSE.jpg
+map_Bump -bm 1.000000 /home/okutic/AR_python/Aumented_Reality/models/blender/22-t-shirt/FCL1-PSK002-00_NORMAL.jpg
+
+newmtl Material109415.135
+Ns 287.632416
+Ka 1.000000 1.000000 1.000000
+Kd 0.733333 0.658824 0.517647
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+
+newmtl Material109415.136
+Ns 287.632416
+Ka 1.000000 1.000000 1.000000
+Kd 0.733333 0.658824 0.517647
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+
+newmtl Material109415.137
+Ns 287.632416
+Ka 1.000000 1.000000 1.000000
+Kd 0.733333 0.658824 0.517647
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+
+newmtl Material109415.138
+Ns 287.632416
+Ka 1.000000 1.000000 1.000000
+Kd 0.733333 0.658824 0.517647
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+
+newmtl Material109415.139
+Ns 287.632416
+Ka 1.000000 1.000000 1.000000
+Kd 0.733333 0.658824 0.517647
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+
+newmtl Material109415.140
+Ns 287.632416
+Ka 1.000000 1.000000 1.000000
+Kd 0.733333 0.658824 0.517647
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+
+newmtl Material109415.141
+Ns 287.632416
+Ka 1.000000 1.000000 1.000000
+Kd 0.733333 0.658824 0.517647
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2

@@ -22,7 +22,7 @@ HIP_RIGHT = 24
 
 # Rutas de archivos
 shirt_path = os.path.expanduser('~/AR_python/Aumented_Reality/models/Black_T_Shirt_PNG_Clip_Art-3107.png')
-obj_path = os.path.expanduser('~/AR_python/Aumented_Reality/models/obj/t_shirt.obj')
+obj_path = os.path.expanduser('~/AR_python/Aumented_Reality/models/obj/new_shirt.obj')
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ cv2.namedWindow("Detección de Pose", cv2.WINDOW_NORMAL)
 
 def load_textures(model_renderer, textures_dir):
     """
-    Carga texturas SOLO desde archivos (no crea texturas por defecto)
+    Carga texturas desde archivos - AHORA CON NORMALES
     
     Returns:
         list: Nombres de texturas cargadas exitosamente
@@ -48,75 +48,104 @@ def load_textures(model_renderer, textures_dir):
     print(f"\n🎨 Cargando texturas desde archivos...")
     print(f"   Directorio: {textures_dir}")
     
-    # SOLO las texturas de archivo que quieres
-    texture_files = [
-        ("shirt_black", "PCL_TEXTURED.png"),
-        ("shirt_white", "pcl_normals.png"),
-        ("shirt_new_order", "pclShirt_without_CLOTHTEXT.png"),
-        ("shirt_red", "red_solid.png"),
+    # Definir pares de texturas (nombre, difusa, normal)
+    # NOMBRE_ARCHIVO_NORMAL = mismo_nombre + "_normal.png"
+    texture_pairs = [
+        ("new_shirt", "new_shirt_bake_diffuse.png", "new_shirt_bake_normals.png"),
+        ("new_shirt_shadows", "new_shirt_bake_shadows.png", "new_shirt_bake_normals.png"),
+        ("shirt_new_order", "pclShirt_without_CLOTHTEXT.png", "new_shirt_bake_normals.png"),
+        ("shirt_combined", "bake_combined.png", "new_shirt_bake_normals.png"),
     ]
     
     files_found = 0
     
-    for tex_name, filename in texture_files:
-        filepath = os.path.join(textures_dir, filename)
+    for tex_name, diffuse_file, normal_file in texture_pairs:
+        diffuse_path = os.path.join(textures_dir, diffuse_file)
+        normal_path = os.path.join(textures_dir, normal_file)
         
-        if os.path.exists(filepath):
-            if model_renderer.texture_renderer.load_texture(tex_name, filepath):
+        # Verificar si existe la textura difusa
+        if os.path.exists(diffuse_path):
+            # Cargar textura difusa
+            if model_renderer.texture_renderer.load_texture(tex_name, diffuse_path, "diffuse"):
+                print(f"✅ Textura difusa '{tex_name}' cargada")
+                
+                # Intentar cargar textura normal si existe
+                if os.path.exists(normal_path):
+                    if model_renderer.texture_renderer.load_texture(tex_name, normal_path, "normal"):
+                        print(f"   🌟 Mapa de normales cargado")
+                    else:
+                        print(f"   ⚠️  Error cargando mapa de normales")
+                else:
+                    print(f"   ⚠️  Mapa de normales no encontrado: {normal_file}")
+                    # Crear un mapa de normales por defecto (azul)
+                    create_default_normal_map(normal_path)
+                    if model_renderer.texture_renderer.load_texture(tex_name, normal_path, "normal"):
+                        print(f"   🔧 Mapa de normales por defecto creado")
+                
                 textures_loaded.append(tex_name)
                 files_found += 1
             else:
-                print(f"   ❌ Error cargando: {filename}")
+                print(f"   ❌ Error cargando textura difusa: {diffuse_file}")
         else:
-            print(f"   ⚠️  Archivo no encontrado: {filename}")
+            print(f"   ⚠️  Archivo difuso no encontrado: {diffuse_file}")
     
     print(f"\n📊 Total de texturas cargadas: {files_found}")
     
+    # Mostrar estadísticas de normales
+    print("\n📈 ESTADÍSTICAS DE NORMALES:")
+    for tex_name in textures_loaded:
+        has_normal = model_renderer.texture_renderer.has_normal_map(tex_name)
+        status = "✅" if has_normal else "❌"
+        print(f"   {status} {tex_name}: {'Con normal map' if has_normal else 'Sin normal map'}")
+    
     return textures_loaded
 
+
+def create_default_normal_map(filepath):
+    """Crea un mapa de normales simple por defecto (azul)"""
+    import cv2
+    import numpy as np
+    
+    # Crear un mapa de normales azul (normales apuntando hacia la cámara)
+    # En espacio tangente: RGB = (0.5, 0.5, 1.0) -> (0, 0, 1) en espacio [-1, 1]
+    normal_map = np.zeros((512, 512, 3), dtype=np.uint8)
+    normal_map[:, :, 0] = 128  # Canal R = 0.5
+    normal_map[:, :, 1] = 128  # Canal G = 0.5  
+    normal_map[:, :, 2] = 255  # Canal B = 1.0 (apuntando hacia +Z)
+    
+    # Guardar como PNG
+    cv2.imwrite(filepath, normal_map)
+    print(f"   🔧 Mapa de normales por defecto creado en: {filepath}")
+    return True
 def list_available_textures(textures_dir):
     """
     Lista las texturas disponibles en el directorio especificado.
     """
-    print("\n📋 TEXTURAS DISPONIBLES (desde archivos):")
+    print("\n📋 TEXTURAS DISPONIBLES:")
     print("=" * 60)
     
-    texture_files = [
-        ("shirt_black", "PCL_TEXTURED.png", "Playera negra sólida"),
-        ("shirt_white", "white_solid.png", "Playera blanca sólida"),
-        ("shirt_new_order", "pclShirt_without_CLOTHTEXT.png", "Playera New Order"),
-        ("shirt_red", "red_solid.png", "Playera roja sólida"),
-    ]
+    # Buscar archivos en el directorio
+    texture_files = []
+    if os.path.exists(textures_dir):
+        for file in os.listdir(textures_dir):
+            if file.lower().endswith(('.png', '.jpg', '.jpeg')):
+                texture_files.append(file)
     
-    available_files = []
-    unavailable_files = []
-    
-    for tex_name, filename, description in texture_files:
-        filepath = os.path.join(textures_dir, filename)
+    if texture_files:
+        print("\n  ✅ ARCHIVOS ENCONTRADOS:")
+        for i, filename in enumerate(sorted(texture_files), 1):
+            print(f"    {i:2}. {filename}")
         
-        if os.path.exists(filepath):
-            available_files.append((tex_name, filename, description))
-        else:
-            unavailable_files.append((tex_name, filename, description))
+        print("\n🎮 USO:")
+        print("  Para usar una textura: python main.py --texture NOMBRE_SIN_EXTENSION")
+        print("  Ejemplo: python main.py --texture new_shirt")
+    else:
+        print("\n  ❌ NO SE ENCONTRARON TEXTURAS")
+        print(f"     Directorio: {textures_dir}")
     
-    if available_files:
-        print("\n  ✅ DISPONIBLES:")
-        for tex_name, filename, description in available_files:
-            print(f"    • {tex_name:15} - {description}")
-            print(f"        Archivo: {filename}")
-    
-    if unavailable_files:
-        print(f"\n  ⚠️  NO DISPONIBLES (archivos faltantes):")
-        for tex_name, filename, description in unavailable_files:
-            print(f"    • {tex_name:15} - {description}")
-            print(f"        Archivo faltante: {filename}")
-    
-    print("\n🎮 USO:")
-    print("  Para usar una textura: python main.py --texture NOMBRE")
-    print("  Ejemplo: python main.py --texture shirt_black")
     print("=" * 60)
     
-    return available_files
+    return texture_files
 
 def print_info(frame=None, fps=0, model_renderer=None):
     info_y = 30
@@ -146,43 +175,76 @@ def print_info(frame=None, fps=0, model_renderer=None):
                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
     
 def read_keyboard(key, model_renderer=None, has_uvs=False):
-    
+        
     # En el bucle principal, actualiza los controles:
     # Cambiar texturas con teclas 1-4
-    if key == ord('1') and model_renderer and "shirt_black" in model_renderer.texture_renderer.list_textures():
-        model_renderer.texture_renderer.set_active_texture("shirt_black")
-        print(f"🎨 Textura: shirt_black")
-    elif key == ord('2') and model_renderer and "shirt_white" in model_renderer.texture_renderer.list_textures():
-        model_renderer.texture_renderer.set_active_texture("shirt_white")
-        print(f"🎨 Textura: shirt_white")
-    elif key == ord('3') and model_renderer and "shirt_new_order" in model_renderer.texture_renderer.list_textures():
-        model_renderer.texture_renderer.set_active_texture("shirt_new_order")
-        print(f"🎨 Textura: shirt_new_order")
-    elif key == ord('4') and model_renderer and "shirt_red" in model_renderer.texture_renderer.list_textures():
-        model_renderer.texture_renderer.set_active_texture("shirt_red")
-        print(f"🎨 Textura: shirt_red")
+    if key == ord('1') and model_renderer:
+        textures = model_renderer.texture_renderer.list_textures()
+        if "new_shirt" in textures:
+            model_renderer.texture_renderer.set_active_texture("new_shirt")
+            print(f"🎨 Textura: new_shirt")
+            # Asegurar modo textured
+            if has_uvs:
+                args.render_mode = "textured"
+                model_renderer.set_render_mode("textured")
+    
+    elif key == ord('2') and model_renderer:
+        textures = model_renderer.texture_renderer.list_textures()
+        if "new_shirt_shadows" in textures:
+            model_renderer.texture_renderer.set_active_texture("new_shirt_shadows")
+            print(f"🎨 Textura: new_shirt_shadows")
+            if has_uvs:
+                args.render_mode = "textured"
+                model_renderer.set_render_mode("textured")
+    
+    elif key == ord('3') and model_renderer:
+        textures = model_renderer.texture_renderer.list_textures()
+        if "shirt_new_order" in textures:
+            model_renderer.texture_renderer.set_active_texture("shirt_new_order")
+            print(f"🎨 Textura: shirt_new_order")
+            if has_uvs:
+                args.render_mode = "textured"
+                model_renderer.set_render_mode("textured")
+    
+    elif key == ord('4') and model_renderer:
+        textures = model_renderer.texture_renderer.list_textures()
+        if "shirt_combined" in textures:
+            model_renderer.texture_renderer.set_active_texture("shirt_combined")
+            print(f"🎨 Textura: shirt_combined")
+            if has_uvs:
+                args.render_mode = "textured"
+                model_renderer.set_render_mode("textured")
+    
     elif key == ord('t') and model_renderer and has_uvs:
         args.render_mode = "textured"
         model_renderer.set_render_mode("textured")
         print(f"🎨 Modo: textured")
+    
     elif key == ord('w') and model_renderer:
         args.render_mode = "wireframe"
         model_renderer.set_render_mode("wireframe")
         print(f"🎨 Modo: wireframe")
+    
     elif key == ord('v'):
         if model_renderer:
             args.use_3d = True
             print(f"🔄 Modo 3D activado")
+    
     elif key == ord('u'):
         args.use_3d = False
         print(f"🔄 Modo 2D activado")
+    
     elif key == ord('l'):  # Listar texturas disponibles
         if model_renderer:
             textures = model_renderer.texture_renderer.list_textures()
             print(f"\n📋 Texturas disponibles ({len(textures)}):")
             for i, tex in enumerate(textures, 1):
                 active = "*" if tex == model_renderer.texture_renderer.active_texture_name else " "
-                print(f"   {i:2}. [{active}] {tex}")
+                # Mostrar si tiene mapa de normales
+                has_normal = model_renderer.texture_renderer.has_normal_map(tex)
+                normal_info = " [N]" if has_normal else ""
+                print(f"   {i:2}. [{active}] {tex}{normal_info}")
+    
     elif key == ord('+') or key == ord('='):  # Tecla + o =
         if model_renderer:
             model_renderer.increase_brightness(0.05)
@@ -202,12 +264,14 @@ def read_keyboard(key, model_renderer=None, has_uvs=False):
         print("\n" + "="*60)
         print("🎮 CONTROLES DEL TECLADO")
         print("="*60)
-        print("TEXTURAS:")
-        print("  1 - Textura negra")
-        print("  2 - Textura blanca")
-        print("  4 - Textura roja")
+        print("TEXTURAS (con normal mapping):")
+        print("  1 - Textura negra [N]")
+        print("  2 - Textura blanca [N]") 
+        print("  3 - Textura New Order [N]")
+        print("  4 - Textura roja [N]")
+        print("  [N] = Con mapa de normales")
         print("\nMODOS DE RENDERIZADO:")
-        print("  T - Modo textured (con texturas)")
+        print("  T - Modo textured (con texturas y normales)")
         print("  W - Modo wireframe (alambre)")
         print("  V - Activar modo 3D")
         print("  U - Activar modo 2D")
@@ -220,7 +284,7 @@ def read_keyboard(key, model_renderer=None, has_uvs=False):
         print("  H     - Mostrar esta ayuda")
         print("  ESC   - Salir")
         print("="*60 + "\n")
-
+    
 def render_shirt_adaptive(model_renderer, torso_width, torso_height, render_mode):
     """
     Renderiza la camisa con la transformación actual
@@ -398,7 +462,7 @@ def mediaPipeRender():
                         torso_width = int(math.sqrt(
                             (right_shoulder_x - left_shoulder_x) ** 2 +
                             (right_shoulder_y - left_shoulder_y) ** 2
-                        ) * 1.9)
+                        ) * 1.8)
 
                         torso_height = int(math.sqrt(
                             (left_hip_x - left_shoulder_x) ** 2 +
@@ -532,7 +596,7 @@ def main():
     # Mostrar ayuda de uso
     print("Uso: python main.py [OPCIONES]")
     print("\nEjemplos:")
-    print("  python main.py --use-3d --render-mode textured --texture shirt_black")
+    print("  python main.py --use-3d --render-mode textured --texture new_shirt")
     print("  python main.py --list-textures  # Ver texturas disponibles")
     print("\nPara más opciones: python main.py --help")
     print("=" * 60)
