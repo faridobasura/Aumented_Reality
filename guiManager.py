@@ -78,10 +78,6 @@ class ARShirtApp:
         # Manejar cierre de ventana
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
     
-    # ============================================================
-    # CREAR INTERFAZ
-    # ============================================================
-    
     def create_ui(self):
         """Crea la interfaz Tkinter"""
         
@@ -98,10 +94,10 @@ class ARShirtApp:
         
         # Frame para controles (derecha)
         control_frame = ttk.LabelFrame(main_frame, text="⚙️ Controles", padding=10)
-        control_frame.pack(side=tk.RIGHT, fill=tk.BOTH, padx=(10, 0))
-        
+        control_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0), expand=False)
+
         # Agregar scrollbar para controles
-        canvas = tk.Canvas(control_frame, highlightthickness=0)
+        canvas = tk.Canvas(control_frame, highlightthickness=0, width=175)  # Ancho fijo aquí        
         scrollbar = ttk.Scrollbar(control_frame, orient="vertical", command=canvas.yview)
         scrollable_frame = ttk.Frame(canvas)
         
@@ -116,32 +112,20 @@ class ARShirtApp:
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
         
-        # ========== MODOS DE RENDERIZADO ==========
-        ttk.Label(scrollable_frame, text="📐 Modo Renderizado:", font=('Arial', 10, 'bold')).pack()
-        
-        mode_frame = ttk.Frame(scrollable_frame)
-        mode_frame.pack(fill=tk.X, pady=5)
-        
-        ttk.Button(mode_frame, text="🎨 Textured", 
-                  command=lambda: self.set_render_mode('textured')).pack(side=tk.LEFT, padx=2)
-        ttk.Button(mode_frame, text="📈 Wireframe", 
-                  command=lambda: self.set_render_mode('wireframe')).pack(side=tk.LEFT, padx=2)
-        ttk.Button(mode_frame, text="⚫ Solid", 
-                  command=lambda: self.set_render_mode('solid')).pack(side=tk.LEFT, padx=2)
-        
         # ========== TEXTURAS ==========
         ttk.Label(scrollable_frame, text="🎭 Cambiar Textura:", font=('Arial', 10, 'bold')).pack(pady=(15, 5))
-        
-        texture_frame = ttk.Frame(scrollable_frame)
-        texture_frame.pack(fill=tk.X, pady=5)
-        
-        self.texture_var = tk.StringVar()
-        self.texture_combo = ttk.Combobox(texture_frame, textvariable=self.texture_var, state='readonly')
-        self.texture_combo.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
-        
-        ttk.Button(texture_frame, text="Aplicar", 
-                  command=self.apply_texture).pack(side=tk.LEFT)
-        
+
+        self.texture_buttons_frame = ttk.Frame(scrollable_frame)
+        self.texture_buttons_frame.pack(fill=tk.X, pady=5)
+
+        # Crear un botón por textura
+        for tex in self.textures_loaded:
+            ttk.Button(
+                self.texture_buttons_frame,
+                text=f"Usar: {tex.replace('_', ' ').title()}",
+                command=lambda t=tex: self.apply_texture(t)
+            ).pack(pady=5, fill=tk.X)
+
         # ========== BRILLO ==========
         ttk.Label(scrollable_frame, text="💡 Brillo:", font=('Arial', 10, 'bold')).pack(pady=(15, 5))
         
@@ -213,9 +197,6 @@ class ARShirtApp:
         ttk.Button(button_frame, text="❌ Salir", 
                   command=self.on_closing).pack(pady=5)
     
-    # ============================================================
-    # EVENTOS DE CONTROLES
-    # ============================================================
     
     def set_render_mode(self, mode):
         """Cambia el modo de renderizado"""
@@ -224,9 +205,8 @@ class ARShirtApp:
             args.render_mode = mode
             self.info_label.config(text=f"✅ Modo: {mode.upper()}", foreground="green")
     
-    def apply_texture(self):
+    def apply_texture(self, texture=None):
         """Aplica la textura seleccionada"""
-        texture = self.texture_var.get()
         if texture and self.model_renderer:
             self.model_renderer.texture_renderer.set_active_texture(texture)
             self.info_label.config(text=f"✅ Textura: {texture}", foreground="green")
@@ -286,36 +266,50 @@ class ARShirtApp:
     def load_model(self):
         """Carga el modelo 3D y las texturas"""
         from utils.objectLoader import ObjModel
-        
+
         print(f"\n🎪 Cargando modelo 3D")
-        
+
         if self.obj_loaded is not None:
             has_uvs = self.obj_loaded.has_texture_coordinates()
             print(f"   ✅ Modelo cargado: {len(self.obj_loaded.vertices)} vértices")
             print(f"   🎨 Coordenadas UV: {'Sí' if has_uvs else 'NO'}")
-            
+
             FRAME_W = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             FRAME_H = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            
+
             render_width = max(512, min(FRAME_W, 1024))
             render_height = max(512, min(FRAME_H, 1024))
-            
+
             self.model_renderer = ModelRenderer(width=render_width, height=render_height, obj=self.obj_loaded)
             self.model_renderer.set_render_mode(args.render_mode)
-            
+
+            # cargar texturas
             self.textures_loaded = self._load_textures()
-            
+
+            # limpiar botones previos si existían
+            for widget in self.texture_buttons_frame.winfo_children():
+                widget.destroy()
+
             if self.textures_loaded:
+                # textura seleccionada por args o default
                 if args.texture and args.texture in self.textures_loaded:
-                    self.model_renderer.texture_renderer.set_active_texture(args.texture)
                     selected = args.texture
                 else:
                     selected = self.textures_loaded[0]
-                    self.model_renderer.texture_renderer.set_active_texture(selected)
-                
-                self.texture_combo['values'] = self.textures_loaded
-                self.texture_var.set(selected)
+
+                # Activar textura en el renderer
+                self.model_renderer.texture_renderer.set_active_texture(selected)
+
+                # Crear botones
+                for tex in self.textures_loaded:
+                    ttk.Button(
+                        self.texture_buttons_frame,
+                        text=tex,
+                        command=lambda t=tex: self.apply_texture(t)
+                    ).pack(pady=3, fill=tk.X)
+
                 self.info_label.config(text=f"✅ Modelo cargado", foreground="green")
+
     
     def _load_textures(self):
         """Carga las texturas disponibles"""
@@ -448,8 +442,11 @@ class ARShirtApp:
                         
                         img_3d = self._render_shirt(torso_width, torso_height)
                         
-                        if img_3d is not None:
-                            frame = twoD_Render.overlay_transparent(frame, img_3d, x, y)
+                        try:
+                            if img_3d is not None:
+                                frame = twoD_Render.overlay_transparent(frame, img_3d, x, y)
+                        except Exception as e:
+                            print(f"❌ Error al superponer playera: {e}")
         
         # Agregar FPS
         cv2.putText(frame, f"FPS: {self.fps:.1f}", (10, 30), 

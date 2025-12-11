@@ -38,8 +38,8 @@ def main():
         return
     
     # Configurar resolución
-    DESIRED_WIDTH = 1280
-    DESIRED_HEIGHT = 720
+    DESIRED_WIDTH = 720
+    DESIRED_HEIGHT = 1024
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, DESIRED_WIDTH)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, DESIRED_HEIGHT)
     
