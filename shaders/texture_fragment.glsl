@@ -2,65 +2,50 @@
 in vec2 TexCoord;
 in vec3 FragPos;
 in vec3 Normal;
-in mat3 TBN;  // Tangent-Bitangent-Normal matrix
 
 out vec4 FragColor;
 
 uniform sampler2D colorTexture;
-uniform sampler2D normalTexture;
 uniform bool useTexture;
-uniform bool useNormalMap;
 uniform float brightness;
-uniform vec3 lightPos;      // Posición de la luz
-uniform vec3 viewPos;       // Posición de la cámara
-uniform float normalStrength; // Intensidad del normal map (0.0 - 1.0)
+uniform vec3 lightPos;
+uniform vec3 viewPos;
+uniform bool debugMode;
 
 void main()
 {
+    if (debugMode) {
+        // Modo debug - visualizar coordenadas UV
+        // Rojo = eje U, Verde = eje V
+        FragColor = vec4(TexCoord.x, TexCoord.y, 0.0, 1.0);
+        return;
+    }
+    
     if (useTexture) {
-        // ===== OBTENER COLORES =====
+        // Obtener color de la textura
         vec4 baseColor = texture(colorTexture, TexCoord);
         
-        // ===== NORMAL MAPPING =====
-        vec3 normal = Normal;
-        
-        if (useNormalMap) {
-            // Obtener el normal del mapa (rango 0-1, convertir a -1 a 1)
-            vec3 sampledNormal = texture(normalTexture, TexCoord).rgb;
-            sampledNormal = normalize(sampledNormal * 2.0 - 1.0);
-            
-            // Convertir a espacio mundial usando TBN
-            sampledNormal = normalize(TBN * sampledNormal);
-            
-            // Interpolar entre normal original y normal mapeado
-            normal = mix(Normal, sampledNormal, normalStrength);
-            normal = normalize(normal);
+        // Si la textura es completamente negra (0,0,0), mostrar coordenadas UV para debug
+        if (baseColor.r < 0.01 && baseColor.g < 0.01 && baseColor.b < 0.01) {
+            FragColor = vec4(TexCoord.x, TexCoord.y, 0.5, 1.0);
+            return;
         }
         
-        // ===== CÁLCULOS DE ILUMINACIÓN =====
-        
-        // Vector de dirección de luz
+        // Iluminación básica suave
         vec3 lightDir = normalize(lightPos - FragPos);
+        float diff = max(dot(normalize(Normal), lightDir), 0.0);
         
-        // Difuso (Lambert) - SUAVIZADO
-        float diff = max(dot(normal, lightDir), 0.0);
-        // Suavizar con smoothstep para evitar cambios abruptos
+        // Suavizar cambios de iluminación
         diff = smoothstep(0.0, 1.0, diff);
         vec3 diffuse = vec3(0.4) * diff;
         
-        // Especular (Blinn-Phong) - REDUCIDO
-        vec3 viewDir = normalize(viewPos - FragPos);
-        vec3 halfDir = normalize(lightDir + viewDir);
-        float spec = pow(max(dot(normal, halfDir), 0.0), 16.0);
-        vec3 specular = vec3(0.15) * spec;
+        // Luz ambiental fuerte
+        vec3 ambient = vec3(0.85);
         
-        // Luz ambiental - AUMENTADA para evitar áreas muy oscuras
-        vec3 ambient = vec3(0.73);
+        // Combinar iluminación
+        vec3 lighting = ambient + diffuse;
         
-        // Combinar todas las luces
-        vec3 lighting = ambient + diffuse + specular;
-        
-        // Aplicar iluminación al color base
+        // Aplicar iluminación a la textura
         vec3 litColor = baseColor.rgb * lighting;
         
         // Agregar brillo ajustable

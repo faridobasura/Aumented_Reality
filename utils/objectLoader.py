@@ -57,7 +57,7 @@ class ObjModel:
                     # Coordenada de textura (u, v)
                     parts = line.split()
                     u = float(parts[1])
-                    v = 1.0 - float(parts[2])  # Invertir V para OpenGL
+                    v = float(parts[2])  # ← CAMBIA ESTO
                     uvs.append([u, v])
                 
                 elif line.startswith("vn "):

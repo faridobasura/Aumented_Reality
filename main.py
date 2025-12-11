@@ -20,7 +20,7 @@ SHOULDER_RIGHT = 12
 HIP_LEFT = 23
 HIP_RIGHT = 24
 
-CAMERA_ID = 2
+CAMERA_ID = 0
 
 # Rutas de archivos
 shirt_path = os.path.expanduser('~/AR_python/Aumented_Reality/models/Black_T_Shirt_PNG_Clip_Art-3107.png')
@@ -57,10 +57,9 @@ def load_textures(model_renderer, textures_dir):
     # Definir pares de texturas (nombre, difusa, normal)
     # NOMBRE_ARCHIVO_NORMAL = mismo_nombre + "_normal.png"
     texture_pairs = [
-        ("new_shirt", "new_shirt_bake_diffuse.png", "new_shirt_bake_normals.png"),
-        ("new_shirt_shadows", "white_solid.png", "new_shirt_bake_normals.png"),
-        ("shirt_new_order", "pclShirt_without_CLOTHTEXT.png", "new_shirt_bake_normals.png"),
-        ("shirt_combined", "bake_combined.png", "new_shirt_bake_normals.png"),
+        ("new_shirt", "pclShirt_without_CLOTHTEXT.png", "new_shirt_bake_normals.png"),
+        ("shirt_spidey", "shirt_spidey_diffuse.png", "new_shirt_bake_normals.png"),
+        ("shirt_new_order", "shirt_diffuse_plc.png", "new_shirt_bake_normals.png"),
     ]
     
     files_found = 0
@@ -196,9 +195,9 @@ def read_keyboard(key, model_renderer=None, has_uvs=False):
     
     elif key == ord('2') and model_renderer:
         textures = model_renderer.texture_renderer.list_textures()
-        if "new_shirt_shadows" in textures:
-            model_renderer.texture_renderer.set_active_texture("new_shirt_shadows")
-            print(f"🎨 Textura: new_shirt_shadows")
+        if "shirt_spidey" in textures:
+            model_renderer.texture_renderer.set_active_texture("shirt_spidey")
+            print(f"🎨 Textura: shirt_spidey")
             if has_uvs:
                 args.render_mode = "textured"
                 model_renderer.set_render_mode("textured")
@@ -208,15 +207,6 @@ def read_keyboard(key, model_renderer=None, has_uvs=False):
         if "shirt_new_order" in textures:
             model_renderer.texture_renderer.set_active_texture("shirt_new_order")
             print(f"🎨 Textura: shirt_new_order")
-            if has_uvs:
-                args.render_mode = "textured"
-                model_renderer.set_render_mode("textured")
-    
-    elif key == ord('4') and model_renderer:
-        textures = model_renderer.texture_renderer.list_textures()
-        if "shirt_combined" in textures:
-            model_renderer.texture_renderer.set_active_texture("shirt_combined")
-            print(f"🎨 Textura: shirt_combined")
             if has_uvs:
                 args.render_mode = "textured"
                 model_renderer.set_render_mode("textured")
@@ -291,6 +281,20 @@ def read_keyboard(key, model_renderer=None, has_uvs=False):
         print("  ESC   - Salir")
         print("="*60 + "\n")
     
+    elif key == ord('d'):  # Tecla D para debug UV
+        if model_renderer:
+            model_renderer.enable_uv_debug()
+            print("Presiona 'D' de nuevo para desactivar")
+
+    elif key == ord('D'):  # Tecla Mayús+D para desactivar
+        if model_renderer:
+            model_renderer.disable_uv_debug()
+
+    elif key == ord('p'):  # Tecla P para imprimir estadísticas
+        if model_renderer:
+            model_renderer.print_uv_statistics()
+            model_renderer.verify_texture_loading()
+    
 def render_shirt_adaptive(model_renderer, torso_width, torso_height, render_mode):
     """
     Renderiza la camisa con la transformación actual
@@ -329,7 +333,7 @@ def mediaPipeRender():
         return
 
     # ROTAR CAMARA SI USAMOS LA OTRA CAMARA
-    if CAMERA_ID == 2:
+    if CAMERA_ID == 0:
         frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
 
     # Mostrar el MISMO frame procesado (ya rotado)
@@ -443,7 +447,7 @@ def mediaPipeRender():
                     break
                 
                 # ROTAR SI USAMOS LA CÁMARA 2
-                if CAMERA_ID == 2:
+                if CAMERA_ID == 0:
                     frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
 
                 # Copia para mediapipe
@@ -487,7 +491,7 @@ def mediaPipeRender():
                         torso_width = int(math.sqrt(
                             (right_shoulder_x - left_shoulder_x) ** 2 +
                             (right_shoulder_y - left_shoulder_y) ** 2
-                        ) * 1.8)
+                        ) * 1.7)
 
                         torso_height = int(math.sqrt(
                             (left_hip_x - left_shoulder_x) ** 2 +
@@ -530,8 +534,13 @@ def mediaPipeRender():
                                 }
 
                                 # Calcular escala
-                                torso_size_pixels = max(torso_width, torso_height)
-                                scale_multiplier = torso_size_pixels / 400.0
+                                #torso_size_pixels = max(torso_width, torso_height)
+                                #scale_multiplier = torso_size_pixels / 400.0
+
+                                right_shoulder_3d = np.array([pl[SHOULDER_RIGHT].x, pl[SHOULDER_RIGHT].y, pl[SHOULDER_RIGHT].z])
+                                left_shoulder_3d = np.array([pl[SHOULDER_LEFT].x, pl[SHOULDER_LEFT].y, pl[SHOULDER_LEFT].z])
+                                shoulder_distance_3d = np.linalg.norm(right_shoulder_3d - left_shoulder_3d)
+                                scale_multiplier = shoulder_distance_3d / 0.25  # ✅ Basado en metros reales
 
                                 # Alinear modelo
                                 rotation, scale, translation = model_renderer.align_model_with_landmarks(

@@ -10,7 +10,7 @@ from utils.app_args import args
 
 from utils.textureRenderer import TextureRenderer
 
-Y_OFFSET = -0.3 
+Y_OFFSET = -0.33 
 X_OFFSET = -0.1  
 class ModelRenderer:
     """Clase corregida - solo los métodos que cambian"""
@@ -85,61 +85,58 @@ class ModelRenderer:
 
     
     def _compile_shaders(self):
-        """Compila shaders con soporte para texturas"""
+        """Compila shaders sin normal mapping"""
         current_dir = os.path.dirname(os.path.abspath(__file__))
         parent_dir = os.path.dirname(current_dir)
         shader_dir = os.path.join(parent_dir, "shaders")
-        
-        # 1. SHADERS PARA TEXTURAS (modelo principal)
+
+        # Cargar shaders simplificados (sin normal mapping)
         vertex_source = self._load_shader_file(os.path.join(shader_dir, "texture_vertex.glsl"))
         fragment_source = self._load_shader_file(os.path.join(shader_dir, "texture_fragment.glsl"))
-        
+
         # Vertex shader
         self.vertex_shader = glCreateShader(GL_VERTEX_SHADER)
         glShaderSource(self.vertex_shader, vertex_source)
         glCompileShader(self.vertex_shader)
-        
+
         if not glGetShaderiv(self.vertex_shader, GL_COMPILE_STATUS):
             error = glGetShaderInfoLog(self.vertex_shader)
             raise RuntimeError(f"Error compilando vertex shader:\n{error}")
-        
+
         # Fragment shader
         self.fragment_shader = glCreateShader(GL_FRAGMENT_SHADER)
         glShaderSource(self.fragment_shader, fragment_source)
         glCompileShader(self.fragment_shader)
-        
+
         if not glGetShaderiv(self.fragment_shader, GL_COMPILE_STATUS):
             error = glGetShaderInfoLog(self.fragment_shader)
             raise RuntimeError(f"Error compilando fragment shader:\n{error}")
-        
-        # Programa principal (para texturas)
+
+        # Programa principal
         self.shader_program = glCreateProgram()
         glAttachShader(self.shader_program, self.vertex_shader)
         glAttachShader(self.shader_program, self.fragment_shader)
         glLinkProgram(self.shader_program)
-        
+
         if not glGetProgramiv(self.shader_program, GL_LINK_STATUS):
             error = glGetProgramInfoLog(self.shader_program)
             raise RuntimeError(f"Error linkando shader program:\n{error}")
-        
-        # Obtener ubicaciones de uniformes para el shader principal
+
+        # Obtener ubicaciones de uniformes (SOLO LOS NECESARIOS)
         self.model_loc = glGetUniformLocation(self.shader_program, "model")
         self.view_loc = glGetUniformLocation(self.shader_program, "view")
         self.proj_loc = glGetUniformLocation(self.shader_program, "projection")
         self.use_texture_loc = glGetUniformLocation(self.shader_program, "useTexture")
         self.brightness_loc = glGetUniformLocation(self.shader_program, "brightness")
-
         self.light_pos_loc = glGetUniformLocation(self.shader_program, "lightPos")
         self.view_pos_loc = glGetUniformLocation(self.shader_program, "viewPos")
-        self.use_normal_map_loc = glGetUniformLocation(self.shader_program, "useNormalMap")
-        self.normal_strength_loc = glGetUniformLocation(self.shader_program, "normalStrength")
         self.color_texture_loc = glGetUniformLocation(self.shader_program, "colorTexture")
-        self.normal_texture_loc = glGetUniformLocation(self.shader_program, "normalTexture")
-    
-        
-        print("✅ Shaders principales compilados con soporte para texturas")
-        
-        # 2. SHADERS PARA DEBUG/ANCLAS (si está en modo debug)
+
+        self.debug_mode_loc = glGetUniformLocation(self.shader_program, "debugMode")
+
+        print("✅ Shaders compilados (sin normal mapping)")
+
+        # Debug shaders si es necesario
         if args.debug:
             self._compile_debug_shaders()
     
@@ -392,35 +389,29 @@ class ModelRenderer:
         glBindFramebuffer(GL_FRAMEBUFFER, 0)
     
     def _upload_mesh(self):
-        """Sube malla a GPU con posiciones y coordenadas UV"""
+        """Sube malla a GPU sin tangentes (no necesarios sin normal mapping)"""
         if self.obj_model is None:
             return
 
         # Expandir caras para obtener posiciones y UVs
         if self.obj_model.has_texture_coordinates() and self.obj_model.has_normals():
-            positions, tex_coords, normals, tangents = self._expand_faces_with_uvs_normals_tangents()
-            has_normals_and_tangents = True
+            positions, tex_coords, normals = self._expand_faces_with_uvs_normals()
         elif self.obj_model.has_texture_coordinates():
             positions, tex_coords = self._expand_faces_with_uvs()
             normals = self._generate_flat_normals(positions)
-            tangents = self._generate_tangents(positions, tex_coords)
-            has_normals_and_tangents = True
         else:
             positions = self._expand_faces()
             tex_coords = np.zeros((len(positions), 2), dtype=np.float32)
             normals = self._generate_flat_normals(positions)
-            tangents = self._generate_tangents(positions, tex_coords)
-            has_normals_and_tangents = True
 
         self.vertex_count = len(positions)
-        
-        # Intercalar posiciones, UVs, normales y tangentes
-        # Formato: [x, y, z, u, v, nx, ny, nz, tx, ty, tz]
-        interleaved = np.zeros((self.vertex_count, 11), dtype=np.float32)
+
+        # Intercalar posiciones, UVs y normales (SIN tangentes)
+        # Formato: [x, y, z, u, v, nx, ny, nz]
+        interleaved = np.zeros((self.vertex_count, 8), dtype=np.float32)
         interleaved[:, 0:3] = positions      # Posiciones (x, y, z)
         interleaved[:, 3:5] = tex_coords     # Coordenadas UV (u, v)
         interleaved[:, 5:8] = normals        # Normales (nx, ny, nz)
-        interleaved[:, 8:11] = tangents      # Tangentes (tx, ty, tz)
 
         # Aplanar el array
         vertex_data = interleaved.flatten()
@@ -433,8 +424,8 @@ class ModelRenderer:
         glBindBuffer(GL_ARRAY_BUFFER, self.vbo)
         glBufferData(GL_ARRAY_BUFFER, vertex_data.nbytes, vertex_data, GL_STATIC_DRAW)
 
-        # STRIDE = 11 floats * 4 bytes cada uno = 44 bytes
-        stride = 11 * 4
+        # STRIDE = 8 floats * 4 bytes cada uno = 32 bytes
+        stride = 8 * 4
 
         # Atributo 0: posición (3 floats)
         glEnableVertexAttribArray(0)
@@ -448,25 +439,18 @@ class ModelRenderer:
         glEnableVertexAttribArray(2)
         glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(20))
 
-        # Atributo 3: tangentes (3 floats) - offset 32 bytes
-        glEnableVertexAttribArray(3)
-        glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(32))
-
         glBindVertexArray(0)
 
-        print(f"✅ Malla subida a GPU: {self.vertex_count} vértices")
+        print(f"✅ Malla subida a GPU: {self.vertex_count} vértices (sin normal mapping)")
         if self.obj_model.has_texture_coordinates():
             print(f"   Incluye coordenadas UV para texturas")
-        if has_normals_and_tangents:
-            print(f"   Incluye normales y tangentes para normal mapping")
 
-    def _expand_faces_with_uvs_normals_tangents(self):
-        """Convierte caras a triángulos con coordenadas UV, normales y tangentes"""
+    def _expand_faces_with_uvs_normals(self):
+        """Convierte caras a triángulos con coordenadas UV y normales (SIN tangentes)"""
         tri_verts = []
         tri_uvs = []
         tri_normals = []
-        
-        # Primero, expandir caras con UVs y normales
+
         for face, face_uv, face_norm in zip(self.obj_model.faces, 
                                              self.obj_model.face_uvs, 
                                              self.obj_model.face_normals):
@@ -475,151 +459,50 @@ class ModelRenderer:
                     vertex_idx = face[i]
                     uv_idx = face_uv[i] if i < len(face_uv) and face_uv[i] >= 0 else 0
                     norm_idx = face_norm[i] if i < len(face_norm) and face_norm[i] >= 0 else 0
-                    
+
                     tri_verts.append(self.obj_model.vertices[vertex_idx])
-                    
+
                     if uv_idx >= 0 and uv_idx < len(self.obj_model.uvs):
                         tri_uvs.append(self.obj_model.uvs[uv_idx])
                     else:
                         tri_uvs.append([0.0, 0.0])
-                    
+
                     if norm_idx >= 0 and norm_idx < len(self.obj_model.normals):
                         tri_normals.append(self.obj_model.normals[norm_idx])
                     else:
                         tri_normals.append([0.0, 0.0, 1.0])
-            
+
             elif len(face) == 4:
-                # Cuadrilátero - dividir en 2 triángulos
-                for i in [0, 1, 2, 0, 2, 3]:  # Dos triángulos
+                for i in [0, 1, 2, 0, 2, 3]:
                     vertex_idx = face[i]
                     uv_idx = face_uv[i] if i < len(face_uv) and face_uv[i] >= 0 else 0
                     norm_idx = face_norm[i] if i < len(face_norm) and face_norm[i] >= 0 else 0
-                    
+
                     tri_verts.append(self.obj_model.vertices[vertex_idx])
-                    
+
                     if uv_idx >= 0 and uv_idx < len(self.obj_model.uvs):
                         tri_uvs.append(self.obj_model.uvs[uv_idx])
                     else:
                         tri_uvs.append([0.0, 0.0])
-                    
+
                     if norm_idx >= 0 and norm_idx < len(self.obj_model.normals):
                         tri_normals.append(self.obj_model.normals[norm_idx])
                     else:
                         tri_normals.append([0.0, 0.0, 1.0])
-        
+
         tri_verts_arr = np.array(tri_verts, dtype=np.float32)
         tri_uvs_arr = np.array(tri_uvs, dtype=np.float32)
         tri_normals_arr = np.array(tri_normals, dtype=np.float32)
-        
-        # Calcular tangentes
-        tangents = self._calculate_tangents(tri_verts_arr, tri_uvs_arr, tri_normals_arr)
-        
-        tri_normals_arr = np.array(tri_normals, dtype=np.float32)
-    
-        # 🔧 NUEVO: Suavizar normales - promedia normales vecinas
-        tri_normals_arr = self._smooth_normals(tri_normals_arr)
 
-        # Calcular tangentes
-        tangents = self._calculate_tangents(tri_verts_arr, tri_uvs_arr, tri_normals_arr)
-
-        return tri_verts_arr, tri_uvs_arr, tri_normals_arr, tangents
-    
-    def _smooth_normals(self, normals, iterations=5):
-        """Suaviza normales para evitar artefactos de iluminación"""
-        smoothed = normals.copy()
-
-        num_triangles = len(normals) // 3
-
-        for _ in range(iterations):
-            temp = smoothed.copy()
-
-            # Para cada triángulo, promediar sus normales con las de triángulos vecinos
-            for i in range(num_triangles):
-                idx = i * 3
-
-                # Promediar los 3 vértices del triángulo
-                avg_normal = (smoothed[idx] + smoothed[idx+1] + smoothed[idx+2]) / 3.0
-                avg_normal = avg_normal / np.linalg.norm(avg_normal)
-
-                # Asignar el promedio a los 3 vértices
-                temp[idx] = avg_normal
-                temp[idx+1] = avg_normal
-                temp[idx+2] = avg_normal
-
-            smoothed = temp
-
-        # Normalizar todas las normales
-        for i in range(len(smoothed)):
-            length = np.linalg.norm(smoothed[i])
+        # Normalizar normales
+        for i in range(len(tri_normals_arr)):
+            length = np.linalg.norm(tri_normals_arr[i])
             if length > 0:
-                smoothed[i] = smoothed[i] / length
+                tri_normals_arr[i] = tri_normals_arr[i] / length
 
-        return smoothed
-    def _calculate_tangents(self, vertices, uvs, normals):
-        """Calcula tangentes para normal mapping usando el algoritmo MikkT space simplificado"""
-        num_triangles = len(vertices) // 3
-        tangents = np.zeros((len(vertices), 3), dtype=np.float32)
+        return tri_verts_arr, tri_uvs_arr, tri_normals_arr
+    
 
-        for i in range(num_triangles):
-            idx = i * 3
-
-            v0 = vertices[idx]
-            v1 = vertices[idx + 1]
-            v2 = vertices[idx + 2]
-
-            uv0 = uvs[idx]
-            uv1 = uvs[idx + 1]
-            uv2 = uvs[idx + 2]
-
-            # Vectores de arista
-            edge1 = v1 - v0
-            edge2 = v2 - v0
-
-            # Diferencias de UV
-            delta_uv1 = uv1 - uv0
-            delta_uv2 = uv2 - uv0
-
-            # Calcular tangente y bitangente
-            denom = delta_uv1[0] * delta_uv2[1] - delta_uv2[0] * delta_uv1[1]
-
-            # Evitar división por cero
-            if abs(denom) < 1e-8:
-                # Usar tangente por defecto
-                tangent = np.array([1.0, 0.0, 0.0])
-                bitangent = np.array([0.0, 1.0, 0.0])
-            else:
-                f = 1.0 / denom
-
-                tangent = np.array([
-                    f * (delta_uv2[1] * edge1[0] - delta_uv1[1] * edge2[0]),
-                    f * (delta_uv2[1] * edge1[1] - delta_uv1[1] * edge2[1]),
-                    f * (delta_uv2[1] * edge1[2] - delta_uv1[1] * edge2[2])
-                ])
-
-                bitangent = np.array([
-                    f * (-delta_uv2[0] * edge1[0] + delta_uv1[0] * edge2[0]),
-                    f * (-delta_uv2[0] * edge1[1] + delta_uv1[0] * edge2[1]),
-                    f * (-delta_uv2[0] * edge1[2] + delta_uv1[0] * edge2[2])
-                ])
-
-            # Ortogonalización de Gram-Schmidt
-            for j in range(3):
-                vertex_idx = idx + j
-                normal = normals[vertex_idx]
-
-                # Proyectar tangente en el plano perpendicular a la normal
-                t = tangent - normal * np.dot(normal, tangent)
-
-                # Normalizar o usar tangente por defecto
-                t_norm = np.linalg.norm(t)
-                if t_norm > 1e-8:
-                    t = t / t_norm
-                else:
-                    t = np.array([1.0, 0.0, 0.0])
-
-                tangents[vertex_idx] = t
-
-        return tangents
     def _generate_flat_normals(self, vertices):
         """Genera normales planas si el modelo no las tiene"""
         num_triangles = len(vertices) // 3
@@ -649,38 +532,6 @@ class ModelRenderer:
             normals[idx + 2] = normal
 
         return normals
-
-    def _generate_tangents(self, vertices, uvs):
-        """Genera tangentes básicas si no hay UVs adecuadas"""
-        num_vertices = len(vertices)
-        tangents = np.zeros((num_vertices, 3), dtype=np.float32)
-
-        # Tangente por defecto (eje X)
-        tangents[:] = [1.0, 0.0, 0.0]
-
-        return tangents
-
-        def _expand_faces(self):
-            """Convierte caras a triángulos (sin UVs)"""
-            tri_verts = []
-            for face in self.obj_model.faces:
-                if len(face) == 3:
-                    tri_verts.extend([
-                        self.obj_model.vertices[face[0]],
-                        self.obj_model.vertices[face[1]],
-                        self.obj_model.vertices[face[2]]
-                    ])
-                elif len(face) == 4:
-                    tri_verts.extend([
-                        self.obj_model.vertices[face[0]],
-                        self.obj_model.vertices[face[1]],
-                        self.obj_model.vertices[face[2]],
-                        self.obj_model.vertices[face[0]],
-                        self.obj_model.vertices[face[2]],
-                        self.obj_model.vertices[face[3]]
-                    ])
-
-            return np.array(tri_verts, dtype=np.float32).reshape(-1, 3)
 
     def _apply_transform(self):
         if self.model_translation.ndim > 1:
@@ -735,7 +586,7 @@ class ModelRenderer:
         
     
     def _draw_model(self):
-        """Dibuja el modelo con shaders, texturas y normal mapping"""
+        """Dibuja el modelo sin normal mapping"""
         glUseProgram(self.shader_program)
 
         # Pasar matrices a shaders
@@ -744,46 +595,32 @@ class ModelRenderer:
             glUniformMatrix4fv(self.view_loc, 1, GL_FALSE, self.view_matrix.T)
             glUniformMatrix4fv(self.proj_loc, 1, GL_FALSE, self.proj_matrix.T)
 
-        # Configurar si usar textura y normal map
+        # Configurar si usar textura
         use_texture = (self.render_mode == "textured" and 
                       self.obj_model.has_texture_coordinates())
         glUniform1i(self.use_texture_loc, 1 if use_texture else 0)
-
-        # Verificar si hay mapa de normales disponible
-        has_normal_map = (use_texture and 
-                         self.texture_renderer.has_normal_map())
-
-        # Configurar normal mapping
-        glUniform1i(self.use_normal_map_loc, 1 if has_normal_map else 0)
-        glUniform1f(self.normal_strength_loc, 0.6)  # Intensidad completa por defecto
 
         # Pasar brillo
         if hasattr(self, 'brightness_loc') and self.brightness_loc != -1:
             glUniform1f(self.brightness_loc, self.brightness)
 
         # Posiciones para iluminación
-        light_pos = [0.0, 2.0, 2.0]  # Luz arriba y a la derecha
-        view_pos = [0.0, 0.0, 3.0]   # Posición de cámara
+        light_pos = [0.0, 2.0, 2.0]
+        view_pos = [0.0, 0.0, 3.0]
 
         if self.light_pos_loc != -1:
             glUniform3fv(self.light_pos_loc, 1, light_pos)
         if self.view_pos_loc != -1:
             glUniform3fv(self.view_pos_loc, 1, view_pos)
 
-        # Vincular texturas
+        # Vincular textura
         if use_texture:
-            # Vincular TODAS las texturas activas
-            self.texture_renderer.bind_active_textures()
-
-            # Pasar ubicaciones de textura al shader
-            glUniform1i(self.color_texture_loc, 0)  # Textura difusa en unidad 0
-
-            # Si hay mapa de normales, pasar su ubicación
-            if has_normal_map and self.normal_texture_loc != -1:
-                glUniform1i(self.normal_texture_loc, 1)  # Textura normal en unidad 1
-                print(f"🔧 Usando mapa de normales para '{self.texture_renderer.active_texture_name}'")
+            self.texture_renderer.bind_diffuse_texture()
+            glUniform1i(self.color_texture_loc, 0)
         else:
             self.texture_renderer.unbind_textures()
+
+        glUniform1i(self.debug_mode_loc, 0)
 
         glBindVertexArray(self.vao)
 
@@ -798,8 +635,6 @@ class ModelRenderer:
 
         # Limpiar
         glBindVertexArray(0)
-        if use_texture:
-            self.texture_renderer.unbind_textures()
         glUseProgram(0)
 
     def render_to_image(self):
@@ -1008,18 +843,18 @@ class ModelRenderer:
             # Factor de ajuste empírico (ajusta según tu modelo)
             SCALE_ADJUSTMENT = 1.55  # ✅ Cambia este valor entre 1.0 y 3.0
             scale = scale_base * SCALE_ADJUSTMENT
-            
-            print(f"\n📊 ESCALA CALCULADA:")
-            print(f"   Distancia modelo: {model_shoulder_dist:.4f}")
-            print(f"   Distancia target: {target_shoulder_dist:.4f}")
-            print(f"   Escala base: {scale_base:.4f}")
-            print(f"   Factor ajuste: {SCALE_ADJUSTMENT}")
-            print(f"   Escala final: {scale:.4f}")
-            
+
+            if args.debug:
+                print(f"\n📊 ESCALA CALCULADA:")
+                print(f"   Escala base: {scale_base:.4f}")
+                print(f"   Factor ajuste: {SCALE_ADJUSTMENT}")
+                print(f"   Escala final: {scale:.4f}")
+
             # Aplicar multiplicador externo si existe
             if scale_multiplier is not None:
                 scale *= scale_multiplier
-                print(f"   Con multiplicador: {scale:.4f}")
+                if args.debug:
+                    print(f"   Con multiplicador: {scale:.4f}")
         else:
             scale = 1.0
             if scale_multiplier is not None:
@@ -1031,11 +866,12 @@ class ModelRenderer:
 
         translation[0] += X_OFFSET
         translation[1] += Y_OFFSET
-        
-        print(f"\n📍 TRASLACIÓN:")
-        print(f"   Target centroid: {target_centroid}")
-        print(f"   Model centroid (rotado y escalado): {scale * (rotation @ model_centroid)}")
-        print(f"   Traslación final: {translation}")
+
+        if args.debug:
+            print(f"\n📍 TRASLACIÓN:")
+            print(f"   Target centroid: {target_centroid}")
+            print(f"   Model centroid (rotado y escalado): {scale * (rotation @ model_centroid)}")
+            print(f"   Traslación final: {translation}")
         
         # Aplicar transformación
         self.model_rotation = rotation
@@ -1072,44 +908,20 @@ class ModelRenderer:
             avg_error = np.mean(list(errors.values()))
             max_error = max(errors.values())
 
-            print(f"\n🔍 ERROR DE ALINEACIÓN:")
-            for name, error in errors.items():
-                status = "✅" if error < 0.05 else "⚠️" if error < 0.1 else "❌"
-                print(f"   {status} {name}: {error:.4f}")
-            print(f"   Promedio: {avg_error:.4f}, Máximo: {max_error:.4f}")
-            
-            if avg_error < 0.05:
-                print("   🎉 ¡Alineación EXCELENTE!")
-            elif avg_error < 0.1:
-                print("   👍 Alineación BUENA")
-            else:
-                print("   ⚠️ Alineación necesita mejora - ajusta SCALE_ADJUSTMENT")
+            if args.debug:
+
+                print(f"\n🔍 ERROR DE ALINEACIÓN:")
+                print(f"   Promedio: {avg_error:.4f}, Máximo: {max_error:.4f}")
+
+                if avg_error < 0.05:
+                    print("   🎉 ¡Alineación EXCELENTE!")
+                elif avg_error < 0.1:
+                    print("   👍 Alineación BUENA")
+                else:
+                    print("   ⚠️ Alineación necesita mejora - ajusta SCALE_ADJUSTMENT")
 
             return avg_error
         return 0.0
-    
-    def set_brightness(self, value):
-        """
-        Establece el brillo adicional
-
-        Args:
-            value (float): Valor entre 0.0 y 1.0
-                          0.0 = sin brillo extra
-                          0.2 = brillo moderado (recomendado para texturas oscuras)
-                          0.5 = brillo alto
-                          1.0 = brillo máximo
-        """
-        self.brightness = max(0.0, min(1.0, value))  # Clamp entre 0 y 1
-        print(f"💡 Brillo ajustado a: {self.brightness:.2f}")
-
-    def increase_brightness(self, step=0.1):
-        """Incrementa el brillo"""
-        self.set_brightness(self.brightness + step)
-
-    def decrease_brightness(self, step=0.1):
-        """Decrementa el brillo"""
-        self.set_brightness(self.brightness - step)
-    
 
     def cleanup(self):
         """Limpia recursos OpenGL y GLFW"""
@@ -1141,6 +953,76 @@ class ModelRenderer:
         glfw.terminate()
         print("✅ Recursos limpiados correctamente")
     
+    def enable_uv_debug(self):
+        """Activa visualización de coordenadas UV"""
+        print("\n🔍 MODO DEBUG UV ACTIVADO")
+        print("   Rojo = eje U (horizontal)")
+        print("   Verde = eje V (vertical)")
+        print("   Coordenadas UV van de 0.0 a 1.0")
+        glUseProgram(self.shader_program)
+        glUniform1i(self.debug_mode_loc, 1)
+        glUseProgram(0)
+
+    def disable_uv_debug(self):
+        """Desactiva visualización de coordenadas UV"""
+        print("🔍 Modo debug desactivado")
+        glUseProgram(self.shader_program)
+        glUniform1i(self.debug_mode_loc, 0)
+        glUseProgram(0)
+
+    def print_uv_statistics(self):
+        """Imprime estadísticas de las coordenadas UV cargadas"""
+        if self.obj_model is None or not self.obj_model.has_texture_coordinates():
+            print("❌ Modelo no tiene coordenadas UV")
+            return
+
+        uvs = self.obj_model.uvs
+        print("\n📊 ESTADÍSTICAS DE COORDENADAS UV:")
+        print(f"   Total de UVs: {len(uvs)}")
+
+        if len(uvs) > 0:
+            u_coords = [uv[0] for uv in uvs]
+            v_coords = [uv[1] for uv in uvs]
+
+            print(f"\n   Eje U (horizontal):")
+            print(f"      Mín: {min(u_coords):.4f}, Máx: {max(u_coords):.4f}")
+            print(f"      Rango esperado: [0.0, 1.0]")
+
+            print(f"\n   Eje V (vertical):")
+            print(f"      Mín: {min(v_coords):.4f}, Máx: {max(v_coords):.4f}")
+            print(f"      Rango esperado: [0.0, 1.0]")
+
+            # Mostrar primeros 10 UVs
+            print(f"\n   Primeros 10 UVs:")
+            for i in range(min(10, len(uvs))):
+                print(f"      UV {i}: ({uvs[i][0]:.4f}, {uvs[i][1]:.4f})")
+
+            # Verificar si hay UVs fuera de rango
+            out_of_range = sum(1 for u, v in uvs if u < 0 or u > 1 or v < 0 or v > 1)
+            if out_of_range > 0:
+                print(f"\n   ⚠️  {out_of_range} UVs fuera del rango [0,1]")
+
+    def verify_texture_loading(self):
+        """Verifica que la textura se haya cargado correctamente"""
+        print("\n🎨 VERIFICACIÓN DE TEXTURA:")
+
+        if not self.texture_renderer.active_texture_name:
+            print("   ❌ No hay textura activa")
+            return
+
+        texture_info = self.texture_renderer.get_texture_info()
+        print(f"   Textura activa: {self.texture_renderer.active_texture_name}")
+        print(f"   Info: {texture_info}")
+
+        if self.obj_model and self.obj_model.has_texture_coordinates():
+            print("   ✅ Modelo tiene coordenadas UV")
+        else:
+            print("   ❌ Modelo NO tiene coordenadas UV")
+
+        if self.render_mode == "textured":
+            print("   ✅ Modo renderizado: textured")
+        else:
+            print(f"   ⚠️  Modo renderizado: {self.render_mode}")
 
     
 def debug_print_matrix(name, matrix):
