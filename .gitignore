@@ -5,13 +5,16 @@ ENV/
 env.bak/
 venv.bak/
 
+
+# Archivos de Blender
+*.blend
+*.blend1
+.blend_thumbnails/
+.blender/
+
+
 # Archivos de Python
 __pycache__/
-
-
-# O mejor aún (más completo):
-**/__pycache__/
-
 *.py[cod]
 *$py.class
 *.so

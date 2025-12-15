@@ -6,10 +6,11 @@ import glfw
 import os
 import ctypes
 import sys
+from utils.app_args import args
 
 from utils.textureRenderer import TextureRenderer
 
-Y_OFFSET = -0.3 
+Y_OFFSET = -0.33 
 X_OFFSET = -0.1  
 class ModelRenderer:
     """Clase corregida - solo los métodos que cambian"""
@@ -21,18 +22,33 @@ class ModelRenderer:
         self.obj_model = obj
         self.vertex_count = 0
         
+        #For t-shirt model
+        #self.ANCHOR_VERTEX_IDS = {
+        #    "right_shoulder": 2557,
+        #    "left_shoulder": 2854,
+        #    "right_hip": 2511,
+        #    "left_hip": 3275,
+        #}
+
+        #Foir new tshirt model
         self.ANCHOR_VERTEX_IDS = {
-            "right_shoulder": 2557,
-            "left_shoulder": 2854,
-            "right_hip": 2511,
-            "left_hip": 3275,
+            "right_shoulder": 41191,
+            "left_shoulder": 25,
+            "right_hip": 7178,
+            "left_hip": 41258,
         }
         
         # Transformaciones
         self.model_translation = np.zeros(3, dtype=np.float32)
         self.model_rotation = np.eye(3, dtype=np.float32)
         self.model_scale = 1.0
-        self.render_mode = "wireframe"
+        if obj.has_texture_coordinates():
+            print(f"✅ Modelo tiene coordenadas UV para texturas")
+            self.render_mode = "texture"
+        else:
+            print(f"⚠️ Modelo NO tiene coordenadas UV - usando modo wireframe")
+            self.render_mode = "wireframe"
+
         
         if obj:
             
@@ -46,6 +62,8 @@ class ModelRenderer:
 
         
         self.texture_renderer = TextureRenderer()
+
+        self.brightness = 0.2  # Valor por defecto (0.0 - 1.0)
         
         # Cargar texturas por defecto
         
@@ -53,7 +71,7 @@ class ModelRenderer:
         self._compile_shaders()
         self._init_gl_objects()
         self._upload_mesh()
-        self._load_default_textures()
+        #self._load_default_textures()
 
     
     def _load_shader_file(self, filepath):
@@ -64,118 +82,186 @@ class ModelRenderer:
         except FileNotFoundError:
             print(f"❌ Error: No se encontró el shader {filepath}")
             # Fallback a shaders embebidos
-            if "vertex" in filepath:
-                return """#version 330 core
-                    layout(location = 0) in vec3 position;
-                    layout(location = 1) in vec3 color;
-                    out vec3 vertexColor;
-                    uniform mat4 model;
-                    uniform mat4 view;
-                    uniform mat4 projection;
-                    void main() {
-                        gl_Position = projection * view * model * vec4(position, 1.0);
-                        vertexColor = color;
-                    }"""
-            else:
-                return """#version 330 core
-                    in vec3 vertexColor;
-                    out vec4 FragColor;
-                    void main() {
-                        FragColor = vec4(vertexColor, 1.0);
-                    }"""
+
     
     def _compile_shaders(self):
-        """Compila shaders desde archivos externos"""
-        # Determinar ruta base
+        """Compila shaders sin normal mapping"""
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        parent_dir = os.path.dirname(current_dir)  # ej: /home/usuario
+        parent_dir = os.path.dirname(current_dir)
         shader_dir = os.path.join(parent_dir, "shaders")
-        
-        # Cargar shaders desde archivos
-        vertex_source = self._load_shader_file(os.path.join(shader_dir, "vertex.glsl"))
-        fragment_source = self._load_shader_file(os.path.join(shader_dir, "fragment.glsl"))
-        
-        # Crear y compilar vertex shader
+
+        # Cargar shaders simplificados (sin normal mapping)
+        vertex_source = self._load_shader_file(os.path.join(shader_dir, "texture_vertex.glsl"))
+        fragment_source = self._load_shader_file(os.path.join(shader_dir, "texture_fragment.glsl"))
+
+        # Vertex shader
         self.vertex_shader = glCreateShader(GL_VERTEX_SHADER)
         glShaderSource(self.vertex_shader, vertex_source)
         glCompileShader(self.vertex_shader)
-        
-        # Verificar compilación
+
         if not glGetShaderiv(self.vertex_shader, GL_COMPILE_STATUS):
             error = glGetShaderInfoLog(self.vertex_shader)
             raise RuntimeError(f"Error compilando vertex shader:\n{error}")
-        
-        # Crear y compilar fragment shader
+
+        # Fragment shader
         self.fragment_shader = glCreateShader(GL_FRAGMENT_SHADER)
         glShaderSource(self.fragment_shader, fragment_source)
         glCompileShader(self.fragment_shader)
-        
+
         if not glGetShaderiv(self.fragment_shader, GL_COMPILE_STATUS):
             error = glGetShaderInfoLog(self.fragment_shader)
             raise RuntimeError(f"Error compilando fragment shader:\n{error}")
-        
-        # Crear programa
+
+        # Programa principal
         self.shader_program = glCreateProgram()
         glAttachShader(self.shader_program, self.vertex_shader)
         glAttachShader(self.shader_program, self.fragment_shader)
         glLinkProgram(self.shader_program)
-        
+
         if not glGetProgramiv(self.shader_program, GL_LINK_STATUS):
             error = glGetProgramInfoLog(self.shader_program)
             raise RuntimeError(f"Error linkando shader program:\n{error}")
-        
-        # Obtener ubicaciones de uniformes
+
+        # Obtener ubicaciones de uniformes (SOLO LOS NECESARIOS)
         self.model_loc = glGetUniformLocation(self.shader_program, "model")
         self.view_loc = glGetUniformLocation(self.shader_program, "view")
         self.proj_loc = glGetUniformLocation(self.shader_program, "projection")
+        self.use_texture_loc = glGetUniformLocation(self.shader_program, "useTexture")
+        self.brightness_loc = glGetUniformLocation(self.shader_program, "brightness")
+        self.light_pos_loc = glGetUniformLocation(self.shader_program, "lightPos")
+        self.view_pos_loc = glGetUniformLocation(self.shader_program, "viewPos")
+        self.color_texture_loc = glGetUniformLocation(self.shader_program, "colorTexture")
+
+        self.debug_mode_loc = glGetUniformLocation(self.shader_program, "debugMode")
+
+        print("✅ Shaders compilados (sin normal mapping)")
+
+        # Debug shaders si es necesario
+        if args.debug:
+            self._compile_debug_shaders()
+    
+    def _compile_debug_shaders(self):
+        """Compila shaders para debug/anclas"""
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        parent_dir = os.path.dirname(current_dir)
+        shader_dir = os.path.join(parent_dir, "shaders")
         
-        print("✅ Shaders compilados exitosamente desde archivos externos")
+        # Cargar shaders para debug
+        debug_vertex_source = self._load_shader_file(os.path.join(shader_dir, "vertex.glsl"))
+        debug_fragment_source = self._load_shader_file(os.path.join(shader_dir, "fragment.glsl"))
+        
+        # Vertex shader para debug
+        self.debug_vertex_shader = glCreateShader(GL_VERTEX_SHADER)
+        glShaderSource(self.debug_vertex_shader, debug_vertex_source)
+        glCompileShader(self.debug_vertex_shader)
+        
+        if not glGetShaderiv(self.debug_vertex_shader, GL_COMPILE_STATUS):
+            error = glGetShaderInfoLog(self.debug_vertex_shader)
+            print(f"⚠️ Error compilando debug vertex shader:\n{error}")
+            self.debug_shader_program = None
+            return
+        
+        # Fragment shader para debug
+        self.debug_fragment_shader = glCreateShader(GL_FRAGMENT_SHADER)
+        glShaderSource(self.debug_fragment_shader, debug_fragment_source)
+        glCompileShader(self.debug_fragment_shader)
+        
+        if not glGetShaderiv(self.debug_fragment_shader, GL_COMPILE_STATUS):
+            error = glGetShaderInfoLog(self.debug_fragment_shader)
+            print(f"⚠️ Error compilando debug fragment shader:\n{error}")
+            self.debug_shader_program = None
+            return
+        
+        # Programa para debug
+        self.debug_shader_program = glCreateProgram()
+        glAttachShader(self.debug_shader_program, self.debug_vertex_shader)
+        glAttachShader(self.debug_shader_program, self.debug_fragment_shader)
+        glLinkProgram(self.debug_shader_program)
+        
+        if not glGetProgramiv(self.debug_shader_program, GL_LINK_STATUS):
+            error = glGetProgramInfoLog(self.debug_shader_program)
+            print(f"⚠️ Error linkando debug shader program:\n{error}")
+            self.debug_shader_program = None
+        else:
+            # Obtener ubicaciones de uniformes para debug
+            self.debug_model_loc = glGetUniformLocation(self.debug_shader_program, "model")
+            self.debug_view_loc = glGetUniformLocation(self.debug_shader_program, "view")
+            self.debug_proj_loc = glGetUniformLocation(self.debug_shader_program, "projection")
+            print("✅ Shaders de debug compilados")
 
     def _init_opengl(self):
         """Inicializa contexto OpenGL con GLFW"""
         if not glfw.init():
             raise RuntimeError("No se pudo inicializar GLFW")
 
-        # Configurar ventana completamente oculta
         glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
         glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
         glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
         glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
         glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, GL_TRUE)
 
-        # Crear ventana pequeña y oculta
         self.window = glfw.create_window(1, 1, "Hidden Render Context", None, None)
         if not self.window:
             glfw.terminate()
             raise RuntimeError("No se pudo crear ventana GLFW oculta")
 
         glfw.make_context_current(self.window)
-
-        # Ocultar completamente la ventana
         glfw.hide_window(self.window)
 
-        # Verificar que esté oculta
-        print(f"✅ Contexto OpenGL creado (ventana oculta)")
-        print(f"   OpenGL version: {glGetString(GL_VERSION).decode()}")
-        print(f"   GLSL version: {glGetString(GL_SHADING_LANGUAGE_VERSION).decode()}")
+        print(f"✅ Contexto OpenGL creado")
 
     def _load_default_textures(self):
-        """Carga texturas iniciales"""
-        # Textura blanca por defecto
-        self.texture_renderer.create_solid_color_texture(
-            "white", (255, 255, 255)
-        )
+        """Carga texturas iniciales (difusas + normales)"""
+        textures_dir = os.path.expanduser('~/AR_python/Aumented_Reality/models/textures/')
         
-        # Textura de debug UV
-        self.texture_renderer.create_checkerboard_texture(
-            "debug_uv",
-            color1=(255, 100, 100),
-            color2=(100, 100, 255)
-        )
+        # Solo cargar textura básica por compatibilidad
+        texture_path = os.path.join(textures_dir, "white_solid.png")
+        normal_path = os.path.join(textures_dir, "white_solid_normal.png")
         
-        # Activar textura blanca por defecto
-        self.texture_renderer.set_active_texture("white")
+        if os.path.exists(texture_path):
+            # Cargar textura difusa
+            if self.texture_renderer.load_texture("t_shirt", texture_path, "diffuse"):
+                print(f"✅ Textura difusa 't_shirt' cargada")
+                
+                # Intentar cargar textura normal
+                if os.path.exists(normal_path):
+                    if self.texture_renderer.load_texture("t_shirt", normal_path, "normal"):
+                        print(f"🌟 Mapa de normales 't_shirt' cargado")
+                else:
+                    print(f"⚠️  Mapa de normales no encontrado para 't_shirt'")
+                
+                self.texture_renderer.set_active_texture("t_shirt")
+            else:
+                print(f"⚠️ No se pudo cargar textura: {texture_path}")
+        else:
+            print(f"⚠️ No se encontró textura en: {texture_path}")
     
+    def load_texture_pair(self, name: str, diffuse_path: str, normal_path: str = None) -> bool:
+        """Carga un par de texturas (difusa + normal)"""
+        success = self.texture_renderer.load_texture_pair(name, diffuse_path, normal_path)
+        if success:
+            print(f"✅ Textura '{name}' cargada:")
+            print(f"   Difusa: {diffuse_path}")
+            if normal_path:
+                print(f"   Normal: {normal_path}")
+
+            # Activar esta textura si es la primera
+            if not self.texture_renderer.active_texture_name:
+                self.texture_renderer.set_active_texture(name)
+        return success
+
+    def set_texture(self, texture_name: str) -> bool:
+        """Establece la textura activa"""
+        success = self.texture_renderer.set_active_texture(texture_name)
+        if success and self.render_mode != "textured":
+            self.set_render_mode("textured")
+        
+        # Actualizar estado de normal mapping
+        if success and self.texture_renderer.has_normal_map():
+            print(f"🌟 Textura '{texture_name}' tiene mapa de normales")
+        
+        return success
+        
     def _calculate_shoulder_distance(self):
         """Calcula distancia entre hombros"""
         if self.obj_model is None:
@@ -195,7 +281,7 @@ class ModelRenderer:
         distance = np.linalg.norm(right - left)
     
         # Si la distancia es muy pequeña, escalar el modelo
-        SCALE_FACTOR = 1.5  # Aumentar este valor para hacer el modelo más grande
+        SCALE_FACTOR = 1.35  # Aumentar este valor para hacer el modelo más grande
         if distance < 0.3:  # Si es menor a 30cm en espacio 3D
             distance *= SCALE_FACTOR
             print(f"⚠️  Modelo muy pequeño, escalando por {SCALE_FACTOR}")
@@ -251,8 +337,29 @@ class ModelRenderer:
         for i in range(3):
             print(f"     [{rotation_mat[i,0]:.3f}, {rotation_mat[i,1]:.3f}, {rotation_mat[i,2]:.3f}]")
 
+    def load_texture(self, name, filepath):
+        """Carga una textura desde archivo"""
+        success = self.texture_renderer.load_texture(name, filepath)
+        if success:
+            print(f"✅ Textura '{name}' cargada desde {filepath}")
+        return success
+    
+    def set_texture(self, texture_name):
+        """Establece la textura activa"""
+        success = self.texture_renderer.set_active_texture(texture_name)
+        if success and self.render_mode != "textured":
+            self.set_render_mode("textured")
+        return success
+    
     def set_render_mode(self, mode):
-        self.render_mode = mode
+        """Cambia el modo de renderizado"""
+        valid_modes = ["wireframe", "textured", "solid"]
+        if mode in valid_modes:
+            self.render_mode = mode
+            print(f"🎨 Modo de renderizado cambiado a: {mode}")
+        else:
+            print(f"❌ Modo inválido: {mode}. Usando 'wireframe'")
+            self.render_mode = "wireframe"
     
     def _init_gl_objects(self):
         """Inicializa buffers OpenGL"""
@@ -282,23 +389,29 @@ class ModelRenderer:
         glBindFramebuffer(GL_FRAMEBUFFER, 0)
     
     def _upload_mesh(self):
-        """Sube malla a GPU con posiciones y colores"""
+        """Sube malla a GPU sin tangentes (no necesarios sin normal mapping)"""
         if self.obj_model is None:
             return
 
-        # Expandir caras para obtener posiciones
-        positions = self._expand_faces()
+        # Expandir caras para obtener posiciones y UVs
+        if self.obj_model.has_texture_coordinates() and self.obj_model.has_normals():
+            positions, tex_coords, normals = self._expand_faces_with_uvs_normals()
+        elif self.obj_model.has_texture_coordinates():
+            positions, tex_coords = self._expand_faces_with_uvs()
+            normals = self._generate_flat_normals(positions)
+        else:
+            positions = self._expand_faces()
+            tex_coords = np.zeros((len(positions), 2), dtype=np.float32)
+            normals = self._generate_flat_normals(positions)
+
         self.vertex_count = len(positions)
 
-        # Generar colores para cada vértice
-        # Por ejemplo: todos grises para el modelo
-        colors = np.full((self.vertex_count, 3), 0.7, dtype=np.float32)  # Gris
-
-        # Intercalar posiciones y colores en un solo array
-        # Formato: [x, y, z, r, g, b, x, y, z, r, g, b, ...]
-        interleaved = np.zeros((self.vertex_count, 6), dtype=np.float32)
-        interleaved[:, 0:3] = positions  # Posiciones (x, y, z)
-        interleaved[:, 3:6] = colors      # Colores (r, g, b)
+        # Intercalar posiciones, UVs y normales (SIN tangentes)
+        # Formato: [x, y, z, u, v, nx, ny, nz]
+        interleaved = np.zeros((self.vertex_count, 8), dtype=np.float32)
+        interleaved[:, 0:3] = positions      # Posiciones (x, y, z)
+        interleaved[:, 3:5] = tex_coords     # Coordenadas UV (u, v)
+        interleaved[:, 5:8] = normals        # Normales (nx, ny, nz)
 
         # Aplanar el array
         vertex_data = interleaved.flatten()
@@ -311,43 +424,114 @@ class ModelRenderer:
         glBindBuffer(GL_ARRAY_BUFFER, self.vbo)
         glBufferData(GL_ARRAY_BUFFER, vertex_data.nbytes, vertex_data, GL_STATIC_DRAW)
 
-        # STRIDE = 6 floats * 4 bytes cada uno = 24 bytes
-        stride = 6 * 4  # 6 floats (3 posición + 3 color) * 4 bytes
+        # STRIDE = 8 floats * 4 bytes cada uno = 32 bytes
+        stride = 8 * 4
 
         # Atributo 0: posición (3 floats)
         glEnableVertexAttribArray(0)
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, None)
 
-        # Atributo 1: color (3 floats) - offset 12 bytes (3 floats * 4 bytes)
+        # Atributo 1: coordenadas UV (2 floats) - offset 12 bytes
         glEnableVertexAttribArray(1)
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(12))
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(12))
+
+        # Atributo 2: normales (3 floats) - offset 20 bytes
+        glEnableVertexAttribArray(2)
+        glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(20))
 
         glBindVertexArray(0)
 
-        print(f"✅ Malla subida a GPU: {self.vertex_count} vértices")
-    
-    def _expand_faces(self):
-        """Convierte caras a triángulos - devuelve array 2D"""
+        print(f"✅ Malla subida a GPU: {self.vertex_count} vértices (sin normal mapping)")
+        if self.obj_model.has_texture_coordinates():
+            print(f"   Incluye coordenadas UV para texturas")
+
+    def _expand_faces_with_uvs_normals(self):
+        """Convierte caras a triángulos con coordenadas UV y normales (SIN tangentes)"""
         tri_verts = []
-        for face in self.obj_model.faces:
+        tri_uvs = []
+        tri_normals = []
+
+        for face, face_uv, face_norm in zip(self.obj_model.faces, 
+                                             self.obj_model.face_uvs, 
+                                             self.obj_model.face_normals):
             if len(face) == 3:
-                tri_verts.extend([
-                    self.obj_model.vertices[face[0]],
-                    self.obj_model.vertices[face[1]],
-                    self.obj_model.vertices[face[2]]
-                ])
+                for i in range(3):
+                    vertex_idx = face[i]
+                    uv_idx = face_uv[i] if i < len(face_uv) and face_uv[i] >= 0 else 0
+                    norm_idx = face_norm[i] if i < len(face_norm) and face_norm[i] >= 0 else 0
+
+                    tri_verts.append(self.obj_model.vertices[vertex_idx])
+
+                    if uv_idx >= 0 and uv_idx < len(self.obj_model.uvs):
+                        tri_uvs.append(self.obj_model.uvs[uv_idx])
+                    else:
+                        tri_uvs.append([0.0, 0.0])
+
+                    if norm_idx >= 0 and norm_idx < len(self.obj_model.normals):
+                        tri_normals.append(self.obj_model.normals[norm_idx])
+                    else:
+                        tri_normals.append([0.0, 0.0, 1.0])
+
             elif len(face) == 4:
-                tri_verts.extend([
-                    self.obj_model.vertices[face[0]],
-                    self.obj_model.vertices[face[1]],
-                    self.obj_model.vertices[face[2]],
-                    self.obj_model.vertices[face[0]],
-                    self.obj_model.vertices[face[2]],
-                    self.obj_model.vertices[face[3]]
-                ])
-        
-        # Convertir a array numpy 2D
-        return np.array(tri_verts, dtype=np.float32).reshape(-1, 3)
+                for i in [0, 1, 2, 0, 2, 3]:
+                    vertex_idx = face[i]
+                    uv_idx = face_uv[i] if i < len(face_uv) and face_uv[i] >= 0 else 0
+                    norm_idx = face_norm[i] if i < len(face_norm) and face_norm[i] >= 0 else 0
+
+                    tri_verts.append(self.obj_model.vertices[vertex_idx])
+
+                    if uv_idx >= 0 and uv_idx < len(self.obj_model.uvs):
+                        tri_uvs.append(self.obj_model.uvs[uv_idx])
+                    else:
+                        tri_uvs.append([0.0, 0.0])
+
+                    if norm_idx >= 0 and norm_idx < len(self.obj_model.normals):
+                        tri_normals.append(self.obj_model.normals[norm_idx])
+                    else:
+                        tri_normals.append([0.0, 0.0, 1.0])
+
+        tri_verts_arr = np.array(tri_verts, dtype=np.float32)
+        tri_uvs_arr = np.array(tri_uvs, dtype=np.float32)
+        tri_normals_arr = np.array(tri_normals, dtype=np.float32)
+
+        # Normalizar normales
+        for i in range(len(tri_normals_arr)):
+            length = np.linalg.norm(tri_normals_arr[i])
+            if length > 0:
+                tri_normals_arr[i] = tri_normals_arr[i] / length
+
+        return tri_verts_arr, tri_uvs_arr, tri_normals_arr
+    
+
+    def _generate_flat_normals(self, vertices):
+        """Genera normales planas si el modelo no las tiene"""
+        num_triangles = len(vertices) // 3
+        normals = np.zeros((len(vertices), 3), dtype=np.float32)
+
+        for i in range(num_triangles):
+            idx = i * 3
+
+            v0 = vertices[idx]
+            v1 = vertices[idx + 1]
+            v2 = vertices[idx + 2]
+
+            # Calcular normal del triángulo
+            edge1 = v1 - v0
+            edge2 = v2 - v0
+            normal = np.cross(edge1, edge2)
+            normal_len = np.linalg.norm(normal)
+
+            if normal_len > 0:
+                normal = normal / normal_len
+            else:
+                normal = np.array([0.0, 0.0, 1.0])
+
+            # Asignar la misma normal a los 3 vértices del triángulo
+            normals[idx] = normal
+            normals[idx + 1] = normal
+            normals[idx + 2] = normal
+
+        return normals
 
     def _apply_transform(self):
         if self.model_translation.ndim > 1:
@@ -402,37 +586,57 @@ class ModelRenderer:
         
     
     def _draw_model(self):
-        """Dibuja el modelo con shaders"""
+        """Dibuja el modelo sin normal mapping"""
         glUseProgram(self.shader_program)
 
         # Pasar matrices a shaders
-        glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, self.model_matrix.T)
-        glUniformMatrix4fv(self.view_loc, 1, GL_FALSE, self.view_matrix.T)
-        glUniformMatrix4fv(self.proj_loc, 1, GL_FALSE, self.proj_matrix.T)
+        if hasattr(self, 'model_matrix'):
+            glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, self.model_matrix.T)
+            glUniformMatrix4fv(self.view_loc, 1, GL_FALSE, self.view_matrix.T)
+            glUniformMatrix4fv(self.proj_loc, 1, GL_FALSE, self.proj_matrix.T)
 
-        glBindVertexArray(self.vao)
+        # Configurar si usar textura
+        use_texture = (self.render_mode == "textured" and 
+                      self.obj_model.has_texture_coordinates())
+        glUniform1i(self.use_texture_loc, 1 if use_texture else 0)
 
-        if self.render_mode == "textured":
-            self.texture_renderer.bind_active_texture()
+        # Pasar brillo
+        if hasattr(self, 'brightness_loc') and self.brightness_loc != -1:
+            glUniform1f(self.brightness_loc, self.brightness)
+
+        # Posiciones para iluminación
+        light_pos = [0.0, 2.0, 2.0]
+        view_pos = [0.0, 0.0, 3.0]
+
+        if self.light_pos_loc != -1:
+            glUniform3fv(self.light_pos_loc, 1, light_pos)
+        if self.view_pos_loc != -1:
+            glUniform3fv(self.view_pos_loc, 1, view_pos)
+
+        # Vincular textura
+        if use_texture:
+            self.texture_renderer.bind_diffuse_texture()
+            glUniform1i(self.color_texture_loc, 0)
         else:
-            self.texture_renderer.unbind_texture()
+            self.texture_renderer.unbind_textures()
+
+        glUniform1i(self.debug_mode_loc, 0)
 
         glBindVertexArray(self.vao)
 
         # Configurar modo de renderizado
         if self.render_mode == "wireframe":
             glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
+            glLineWidth(1.0)
         else:
             glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
 
         glDrawArrays(GL_TRIANGLES, 0, self.vertex_count)
 
-        # ✅ AGREGAR: Desvincular textura
-        self.texture_renderer.unbind_texture()
-
+        # Limpiar
         glBindVertexArray(0)
         glUseProgram(0)
-    
+
     def render_to_image(self):
         """Renderiza a imagen usando shaders"""
         glBindFramebuffer(GL_FRAMEBUFFER, self.fbo)
@@ -459,7 +663,8 @@ class ModelRenderer:
         self._draw_model()
         
         # 5. Dibujar vértices ancla para debug
-        self.draw_anchor_vertices_with_labels()
+        if args.debug:
+            self.draw_anchor_vertices_with_labels()
         
         # 6. Leer píxeles
         buffer = glReadPixels(0, 0, self.width, self.height,
@@ -479,17 +684,24 @@ class ModelRenderer:
         if self.obj_model is None:
             return
 
+        # Si no hay shader de debug, usar el principal (pero sin texturas)
+        if not hasattr(self, 'debug_shader_program') or self.debug_shader_program is None:
+            print("⚠️ Usando shader principal para debug (sin texturas)")
+            self._draw_anchor_with_main_shader()
+            return
+
         # Asegurar que tenemos matrices válidas
         if not hasattr(self, 'model_matrix') or self.model_matrix is None:
             self._apply_transform()
 
-        # Usar el mismo shader que el modelo principal
-        glUseProgram(self.shader_program)
+        # Usar el shader de debug
+        glUseProgram(self.debug_shader_program)
 
         # Configurar matrices
-        glUniformMatrix4fv(self.model_loc, 1, GL_FALSE, self.model_matrix.T)
-        glUniformMatrix4fv(self.view_loc, 1, GL_FALSE, self.view_matrix.T)
-        glUniformMatrix4fv(self.proj_loc, 1, GL_FALSE, self.proj_matrix.T)
+        glUniformMatrix4fv(self.debug_model_loc, 1, GL_FALSE, self.model_matrix.T)
+        glUniformMatrix4fv(self.debug_view_loc, 1, GL_FALSE, self.view_matrix.T)
+        glUniformMatrix4fv(self.debug_proj_loc, 1, GL_FALSE, self.proj_matrix.T)
+
 
         # Colores para los puntos ancla
         anchor_colors = {
@@ -631,18 +843,18 @@ class ModelRenderer:
             # Factor de ajuste empírico (ajusta según tu modelo)
             SCALE_ADJUSTMENT = 1.55  # ✅ Cambia este valor entre 1.0 y 3.0
             scale = scale_base * SCALE_ADJUSTMENT
-            
-            print(f"\n📊 ESCALA CALCULADA:")
-            print(f"   Distancia modelo: {model_shoulder_dist:.4f}")
-            print(f"   Distancia target: {target_shoulder_dist:.4f}")
-            print(f"   Escala base: {scale_base:.4f}")
-            print(f"   Factor ajuste: {SCALE_ADJUSTMENT}")
-            print(f"   Escala final: {scale:.4f}")
-            
+
+            if args.debug:
+                print(f"\n📊 ESCALA CALCULADA:")
+                print(f"   Escala base: {scale_base:.4f}")
+                print(f"   Factor ajuste: {SCALE_ADJUSTMENT}")
+                print(f"   Escala final: {scale:.4f}")
+
             # Aplicar multiplicador externo si existe
             if scale_multiplier is not None:
                 scale *= scale_multiplier
-                print(f"   Con multiplicador: {scale:.4f}")
+                if args.debug:
+                    print(f"   Con multiplicador: {scale:.4f}")
         else:
             scale = 1.0
             if scale_multiplier is not None:
@@ -654,11 +866,12 @@ class ModelRenderer:
 
         translation[0] += X_OFFSET
         translation[1] += Y_OFFSET
-        
-        print(f"\n📍 TRASLACIÓN:")
-        print(f"   Target centroid: {target_centroid}")
-        print(f"   Model centroid (rotado y escalado): {scale * (rotation @ model_centroid)}")
-        print(f"   Traslación final: {translation}")
+
+        if args.debug:
+            print(f"\n📍 TRASLACIÓN:")
+            print(f"   Target centroid: {target_centroid}")
+            print(f"   Model centroid (rotado y escalado): {scale * (rotation @ model_centroid)}")
+            print(f"   Traslación final: {translation}")
         
         # Aplicar transformación
         self.model_rotation = rotation
@@ -669,20 +882,6 @@ class ModelRenderer:
         avg_error = self.verify_alignment_quality(corrected_landmarks)
         
         return rotation, scale, translation
-    
-    def _calculate_average_distance(self, points):
-        """Calcula la distancia promedio entre puntos"""
-        if len(points) < 2:
-            return 0.0
-        
-        # Calcular todas las distancias entre pares de puntos
-        distances = []
-        for i in range(len(points)):
-            for j in range(i + 1, len(points)):
-                dist = np.linalg.norm(points[i] - points[j])
-                distances.append(dist)
-        
-        return np.mean(distances) if distances else 0.0
     
     def verify_alignment_quality(self, landmarks_3d_corrected):
         """Verificación de calidad de alineación"""
@@ -709,22 +908,20 @@ class ModelRenderer:
             avg_error = np.mean(list(errors.values()))
             max_error = max(errors.values())
 
-            print(f"\n🔍 ERROR DE ALINEACIÓN:")
-            for name, error in errors.items():
-                status = "✅" if error < 0.05 else "⚠️" if error < 0.1 else "❌"
-                print(f"   {status} {name}: {error:.4f}")
-            print(f"   Promedio: {avg_error:.4f}, Máximo: {max_error:.4f}")
-            
-            if avg_error < 0.05:
-                print("   🎉 ¡Alineación EXCELENTE!")
-            elif avg_error < 0.1:
-                print("   👍 Alineación BUENA")
-            else:
-                print("   ⚠️ Alineación necesita mejora - ajusta SCALE_ADJUSTMENT")
+            if args.debug:
+
+                print(f"\n🔍 ERROR DE ALINEACIÓN:")
+                print(f"   Promedio: {avg_error:.4f}, Máximo: {max_error:.4f}")
+
+                if avg_error < 0.05:
+                    print("   🎉 ¡Alineación EXCELENTE!")
+                elif avg_error < 0.1:
+                    print("   👍 Alineación BUENA")
+                else:
+                    print("   ⚠️ Alineación necesita mejora - ajusta SCALE_ADJUSTMENT")
 
             return avg_error
         return 0.0
-    
 
     def cleanup(self):
         """Limpia recursos OpenGL y GLFW"""
@@ -756,74 +953,76 @@ class ModelRenderer:
         glfw.terminate()
         print("✅ Recursos limpiados correctamente")
     
-    def debug_print_vectors(self, rotation):
-        """Imprime los vectores de dirección de la rotación"""
-        print(f"\n🧭 VECTORES DE DIRECCIÓN:")
-        
-        # Vectores base
-        forward = rotation @ np.array([0, 0, 1])  # Z positivo es hacia adelante en Blender
-        right = rotation @ np.array([1, 0, 0])    # X positivo es hacia la derecha
-        up = rotation @ np.array([0, 1, 0])       # Y positivo es hacia arriba
-        
-        print(f"   Forward (Z): {forward}")
-        print(f"   Right (X): {right}")
-        print(f"   Up (Y): {up}")
-        
-        return forward, right, up
+    def enable_uv_debug(self):
+        """Activa visualización de coordenadas UV"""
+        print("\n🔍 MODO DEBUG UV ACTIVADO")
+        print("   Rojo = eje U (horizontal)")
+        print("   Verde = eje V (vertical)")
+        print("   Coordenadas UV van de 0.0 a 1.0")
+        glUseProgram(self.shader_program)
+        glUniform1i(self.debug_mode_loc, 1)
+        glUseProgram(0)
 
-    def calculate_manual_alignment(self, model_points_arr, target_points_arr):
-        """
-        Alineación MANUAL basada en vectores del torso
-        Esto evita los problemas de Procrustes con la orientación
-        """
-        print("\n🎯 ALINEACIÓN MANUAL (basada en vectores)")
+    def disable_uv_debug(self):
+        """Desactiva visualización de coordenadas UV"""
+        print("🔍 Modo debug desactivado")
+        glUseProgram(self.shader_program)
+        glUniform1i(self.debug_mode_loc, 0)
+        glUseProgram(0)
 
-        # 1. Extraer puntos específicos
-        # Suponiendo que los puntos están en este orden: [left_shoulder, right_shoulder, left_hip, right_hip]
-        if len(model_points_arr) >= 4 and len(target_points_arr) >= 4:
-            # Puntos del modelo
-            m_ls = model_points_arr[0]  # left shoulder
-            m_rs = model_points_arr[1]  # right shoulder
-            m_lh = model_points_arr[2]  # left hip
-            m_rh = model_points_arr[3]  # right hip
+    def print_uv_statistics(self):
+        """Imprime estadísticas de las coordenadas UV cargadas"""
+        if self.obj_model is None or not self.obj_model.has_texture_coordinates():
+            print("❌ Modelo no tiene coordenadas UV")
+            return
 
-            # Puntos objetivo
-            t_ls = target_points_arr[0]
-            t_rs = target_points_arr[1]
-            t_lh = target_points_arr[2]
-            t_rh = target_points_arr[3]
+        uvs = self.obj_model.uvs
+        print("\n📊 ESTADÍSTICAS DE COORDENADAS UV:")
+        print(f"   Total de UVs: {len(uvs)}")
 
-            # 2. Calcular vectores para el modelo
-            m_right = m_rs - m_ls  # De izquierda a derecha
-            m_down = (m_lh + m_rh)/2 - (m_ls + m_rs)/2  # De hombros a caderas
-            m_forward = np.cross(m_right, m_down)  # Forward es perpendicular
+        if len(uvs) > 0:
+            u_coords = [uv[0] for uv in uvs]
+            v_coords = [uv[1] for uv in uvs]
 
-            # Normalizar
-            m_right = m_right / np.linalg.norm(m_right)
-            m_down = m_down / np.linalg.norm(m_down)
-            m_forward = m_forward / np.linalg.norm(m_forward)
+            print(f"\n   Eje U (horizontal):")
+            print(f"      Mín: {min(u_coords):.4f}, Máx: {max(u_coords):.4f}")
+            print(f"      Rango esperado: [0.0, 1.0]")
 
-            # 3. Calcular vectores para los landmarks
-            t_right = t_rs - t_ls
-            t_down = (t_lh + t_rh)/2 - (t_ls + t_rs)/2
-            t_forward = np.cross(t_right, t_down)
+            print(f"\n   Eje V (vertical):")
+            print(f"      Mín: {min(v_coords):.4f}, Máx: {max(v_coords):.4f}")
+            print(f"      Rango esperado: [0.0, 1.0]")
 
-            # Normalizar
-            t_right = t_right / np.linalg.norm(t_right)
-            t_down = t_down / np.linalg.norm(t_down)
-            t_forward = t_forward / np.linalg.norm(t_forward)
+            # Mostrar primeros 10 UVs
+            print(f"\n   Primeros 10 UVs:")
+            for i in range(min(10, len(uvs))):
+                print(f"      UV {i}: ({uvs[i][0]:.4f}, {uvs[i][1]:.4f})")
 
-            # 4. Crear matrices de rotación
-            m_basis = np.column_stack([m_right, m_down, m_forward])
-            t_basis = np.column_stack([t_right, t_down, t_forward])
+            # Verificar si hay UVs fuera de rango
+            out_of_range = sum(1 for u, v in uvs if u < 0 or u > 1 or v < 0 or v > 1)
+            if out_of_range > 0:
+                print(f"\n   ⚠️  {out_of_range} UVs fuera del rango [0,1]")
 
-            # 5. Calcular rotación que convierte m_basis a t_basis
-            rotation = t_basis @ np.linalg.inv(m_basis)
+    def verify_texture_loading(self):
+        """Verifica que la textura se haya cargado correctamente"""
+        print("\n🎨 VERIFICACIÓN DE TEXTURA:")
 
-            print(f"   Rotación calculada (manual)")
-            return rotation
+        if not self.texture_renderer.active_texture_name:
+            print("   ❌ No hay textura activa")
+            return
 
-        return np.eye(3)  # Matriz identidad si falla
+        texture_info = self.texture_renderer.get_texture_info()
+        print(f"   Textura activa: {self.texture_renderer.active_texture_name}")
+        print(f"   Info: {texture_info}")
+
+        if self.obj_model and self.obj_model.has_texture_coordinates():
+            print("   ✅ Modelo tiene coordenadas UV")
+        else:
+            print("   ❌ Modelo NO tiene coordenadas UV")
+
+        if self.render_mode == "textured":
+            print("   ✅ Modo renderizado: textured")
+        else:
+            print(f"   ⚠️  Modo renderizado: {self.render_mode}")
 
     
 def debug_print_matrix(name, matrix):
