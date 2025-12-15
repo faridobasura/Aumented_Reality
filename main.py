@@ -332,7 +332,7 @@ def mediaPipeRender():
         return
 
     # ROTAR CAMARA SI USAMOS LA OTRA CAMARA
-    if CAMERA_ID == 0:
+    if CAMERA_ID == 2:
         frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
 
     # Mostrar el MISMO frame procesado (ya rotado)
@@ -446,7 +446,7 @@ def mediaPipeRender():
                     break
                 
                 # ROTAR SI USAMOS LA CÁMARA 2
-                if CAMERA_ID == 0:
+                if CAMERA_ID == 2:
                     frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
 
                 # Copia para mediapipe
