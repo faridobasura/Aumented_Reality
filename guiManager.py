@@ -12,6 +12,7 @@ import numpy as np
 from utils.app_args import args
 from utils.modelRenderer import ModelRenderer
 from utils import twoD_Render
+from utils.poseSmoother import PoseSmoother
 
 # Constantes
 SHOULDER_LEFT = 11
@@ -64,6 +65,14 @@ class ARApp:
 
         self.mp_drawing = mp_drawing
         self.pose_connections = pose_connections
+
+        self.pose_smoother = PoseSmoother(
+            window_size=5,      # Promediar últimos 5 frames
+            alpha=0.4           # 0.4 = suavizado moderado (ajusta entre 0.2-0.6)
+        )
+        self.last_valid_landmarks = None
+        self.frames_without_pose = 0
+        self.max_frames_without_pose = 10  # Máximo de frames sin pose antes de resetear
         
         # Crear interfaz
         self.create_ui()
@@ -394,6 +403,8 @@ class ARApp:
             visible_hips = left_hip_visible and right_hip_visible
             
             if visible_shoulders and visible_hips and self.model_renderer:
+                self.frames_without_pose = 0  # AGREGAR
+
                 # Calcular coordenadas del torso
                 left_shoulder_x = int(landmarks[SHOULDER_LEFT].x * w)
                 left_shoulder_y = int(landmarks[SHOULDER_LEFT].y * h)
@@ -447,12 +458,21 @@ class ARApp:
                         scale_multiplier=scale_multiplier
                     )
                     
-                    # Aplicar transformación
+                    # SUAVIZAR TRANSFORMACIÓN
                     if rotation is not None and translation is not None:
-                        translation[0] += self.current_x_offset
-                        translation[1] += self.current_y_offset
+                        translation_arr = np.array(translation, dtype=np.float32)
+                        rotation_arr = np.array(rotation, dtype=np.float32)
                         
-                        self.model_renderer.set_model_transform(translation, rotation, scale)
+                        # Suavizar
+                        translation_arr, rotation_arr, scale = self.pose_smoother.smooth_transform(
+                            translation_arr, rotation_arr, scale
+                        )
+                        
+                        # Aplicar offsets
+                        translation_arr[0] += self.current_x_offset
+                        translation_arr[1] += self.current_y_offset
+                        
+                        self.model_renderer.set_model_transform(translation_arr, rotation_arr, scale)
                         
                         img_3d = self._render_shirt(torso_width, torso_height)
                         
@@ -460,7 +480,13 @@ class ARApp:
                             if img_3d is not None:
                                 frame = twoD_Render.overlay_transparent(frame, img_3d, x, y)
                         except Exception as e:
-                            print(f"❌ Error al superponer playera: {e}")
+                            print(f"âŒ Error al superponer playera: {e}")
+            else:
+                # AGREGAR - Usar última pose válida si no se detecta
+                self.frames_without_pose += 1
+                if self.frames_without_pose > self.max_frames_without_pose:
+                    self.pose_smoother.reset()
+                    self.frames_without_pose = 0
         
         
         # Agregar FPS
