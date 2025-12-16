@@ -10,7 +10,7 @@ import mediapipe as mp
 
 from utils.objectLoader import ObjModel
 from utils.app_args import args
-from guiManager import ARShirtApp
+from guiManager import ARApp
 
 # Constantes
 CAMERA_ID = 0
@@ -18,7 +18,6 @@ CAMERA_ID = 0
 # Rutas de archivos
 shirt_path = os.path.expanduser('~/AR_python/Aumented_Reality/models/Black_T_Shirt_PNG_Clip_Art-3107.png')
 obj_path = os.path.expanduser('~/AR_python/Aumented_Reality/models/obj/new_shirt.obj')
-
 
 def main():
     
@@ -56,15 +55,20 @@ def main():
         min_detection_confidence=0.5,
         min_tracking_confidence=0.5
     )
+
+    mp_drawing = mp.solutions.drawing_utils
+    pose_connections = mp.solutions.pose.POSE_CONNECTIONS
+
     print(f"MediaPipe inicializado")
-    
     root = tk.Tk()
     
     # Crear aplicación
-    app = ARShirtApp(
+    app = ARApp(
         root=root,
         cap=cap,
         mp_pose=mp_pose,
+        mp_drawing = mp_drawing,
+        pose_connections = pose_connections,
         obj_loaded=obj_loaded,
         textures_dir=args.textures_dir,
         shirt_path=shirt_path

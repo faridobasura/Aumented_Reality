@@ -19,11 +19,10 @@ SHOULDER_RIGHT = 12
 HIP_LEFT = 23
 HIP_RIGHT = 24
 
-
-class ARShirtApp:
+class ARApp:
     """Clase principal de la interfaz Tkinter para AR Shirt"""
     
-    def __init__(self, root, cap, mp_pose, obj_loaded, textures_dir, shirt_path):
+    def __init__(self, root, cap, mp_pose, mp_drawing, pose_connections, obj_loaded, textures_dir, shirt_path):
         """
         Inicializa la aplicación
         
@@ -62,6 +61,9 @@ class ARShirtApp:
         self.fps = 0
         self.frame_count = 0
         self.prev_time = cv2.getTickCount()
+
+        self.mp_drawing = mp_drawing
+        self.pose_connections = pose_connections
         
         # Crear interfaz
         self.create_ui()
@@ -370,6 +372,18 @@ class ARShirtApp:
         
         if results.pose_landmarks:
             landmarks = results.pose_landmarks.landmark
+
+            mp_drawing = self.mp_drawing
+            pose_connections = self.pose_connections
+
+            if args.debug and results.pose_landmarks:
+                mp_drawing.draw_landmarks(
+                   frame,
+                   results.pose_landmarks,
+                   pose_connections,
+                   mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=2, circle_radius=2),
+                   mp_drawing.DrawingSpec(color=(255, 0, 0), thickness=2)
+                )
             
             left_shoulder_visible = landmarks[SHOULDER_LEFT].visibility > 0.8
             right_shoulder_visible = landmarks[SHOULDER_RIGHT].visibility > 0.8
@@ -447,6 +461,7 @@ class ARShirtApp:
                                 frame = twoD_Render.overlay_transparent(frame, img_3d, x, y)
                         except Exception as e:
                             print(f"❌ Error al superponer playera: {e}")
+        
         
         # Agregar FPS
         cv2.putText(frame, f"FPS: {self.fps:.1f}", (10, 30), 
