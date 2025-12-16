@@ -42,15 +42,8 @@ def compute_torso_frame(pL, pR, pH):
     y_axis = y_axis / np.linalg.norm(y_axis)
     
     # 3. Matriz de rotación - VERIFICAR SIGNOS
-    # CORRECCIÓN: Si el modelo gira al revés, invertir eje X
-    # Prueba estas opciones:
     
-    # Opción A: Invertir solo eje X (para corregir giro contrario)
     x_axis = -x_axis  # <- Agrega esta línea si el giro es inverso
-    
-    # Opción B: Invertir ambos, X y Z (rotación 180° en Y)
-    # x_axis = -x_axis
-    # z_axis = -z_axis
     
     # Opción C: Cambiar orden de columnas si es necesario
     # OpenGL típico: columnas = [derecha, arriba, adelante]

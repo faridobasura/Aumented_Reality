@@ -38,7 +38,7 @@ class ObjModel:
         face_uvs = []
         face_normals = []
         
-        print(f"📂 Cargando modelo: {os.path.basename(path)}")
+        print(f" Cargando modelo: {os.path.basename(path)}")
         
         with open(path, "r") as f:
             for line in f:
@@ -127,7 +127,7 @@ class ObjModel:
             normals = None
             face_normals = None
         
-        print(f"✅ Modelo cargado: {len(vertices)} vértices, {len(faces)} caras")
+        print(f" Modelo cargado: {len(vertices)} vértices, {len(faces)} caras")
         
         if uvs is not None:
             print(f"   Texturas: {len(uvs)} coordenadas UV")
@@ -150,7 +150,6 @@ class ObjModel:
     
     @staticmethod
     def _normalize_vertices(vertices):
-        """Normaliza vértices para que quepan en un cubo unitario centrado"""
         if len(vertices) == 0:
             return vertices
         
@@ -189,7 +188,7 @@ class ObjModel:
         if self.has_normals():
             return
         
-        print("🔧 Generando normales planas...")
+        print(" Generando normales planas...")
         
         # Inicializar acumuladores de normales
         vertex_normals = np.zeros((len(self.vertices), 3), dtype=np.float32)
@@ -231,7 +230,7 @@ class ObjModel:
         # Crear índices de normales (mismos que vértices)
         self.face_normals = self.faces.copy()
         
-        print(f"✅ Normales generadas: {len(self.normals)} normales")
+        print(f" Normales generadas: {len(self.normals)} normales")
     
     def get_vertex_count(self):
         """Obtiene número total de vértices después de expandir caras"""
@@ -244,7 +243,6 @@ class ObjModel:
         return total
     
     def print_info(self):
-        """Imprime información detallada del modelo"""
         print("\n📊 INFORMACIÓN DEL MODELO:")
         print(f"   Vértices: {len(self.vertices)}")
         print(f"   Caras: {len(self.faces)}")
@@ -345,7 +343,7 @@ if __name__ == '__main__':
     
     # Mostrar algunas normales de ejemplo
     if model.has_normals():
-        print("\n📐 Normales de ejemplo (primeras 5):")
+        print("\n Normales de ejemplo (primeras 5):")
         for i in range(min(5, len(model.normals))):
             print(f"   Normal {i}: [{model.normals[i][0]:.3f}, {model.normals[i][1]:.3f}, {model.normals[i][2]:.3f}]")
     
@@ -353,6 +351,6 @@ if __name__ == '__main__':
     img = render_to_opencv(model.vertices, model.faces)
     
     cv2.imshow('Modelo 3D', img)
-    print("\n👁️ Presiona cualquier tecla para cerrar la ventana...")
+    print("\n Presiona cualquier tecla para cerrar la ventana...")
     cv2.waitKey(0)
     cv2.destroyAllWindows()
