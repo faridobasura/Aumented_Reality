@@ -21,16 +21,8 @@ obj_path = os.path.expanduser('~/AR_python/Aumented_Reality/models/obj/new_shirt
 
 
 def main():
-    """Función principal"""
-    
-    print("""
-    ========================================
-    🎽 SISTEMA DE REALIDAD AUMENTADA 3D
-    ========================================
-    """)
     
     # Inicializar cámara
-    print(f"\n📷 Inicializando cámara...")
     cap = cv2.VideoCapture(CAMERA_ID)
     
     if not cap.isOpened():
@@ -45,20 +37,18 @@ def main():
     
     FRAME_W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     FRAME_H = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    print(f"✅ Cámara inicializada: {FRAME_W}x{FRAME_H}")
     
     # Cargar modelo 3D
-    print(f"\n🎪 Cargando modelo 3D desde: {obj_path}")
     try:
         obj_loaded = ObjModel.load_obj(obj_path)
-        print(f"✅ Modelo cargado: {len(obj_loaded.vertices)} vértices")
+        print(f"Modelo cargado: {len(obj_loaded.vertices)} vértices")
     except Exception as e:
-        print(f"❌ Error cargando modelo: {e}")
+        print(f"Error cargando modelo: {e}")
         cap.release()
         return
     
     # Inicializar MediaPipe
-    print(f"\n🧠 Inicializando MediaPipe...")
+    print(f"\nMediaPipe...")
     mp_pose = mp.solutions.pose.Pose(
         static_image_mode=False,
         model_complexity=1,
@@ -66,10 +56,8 @@ def main():
         min_detection_confidence=0.5,
         min_tracking_confidence=0.5
     )
-    print(f"✅ MediaPipe inicializado")
+    print(f"MediaPipe inicializado")
     
-    # Crear ventana Tkinter
-    print(f"\n🎨 Creando interfaz gráfica...")
     root = tk.Tk()
     
     # Crear aplicación
@@ -80,19 +68,14 @@ def main():
         obj_loaded=obj_loaded,
         textures_dir=args.textures_dir,
         shirt_path=shirt_path
-    )
-    
-    print(f"✅ Interfaz creada")
-    print(f"\n🎽 ¡Aplicación lista! Usa los controles de la derecha para ajustar la playera.")
-    
-    # Iniciar bucle principal
+    )    
     root.mainloop()
     
     # Limpiar
-    print("\n🧹 Limpiando recursos...")
+    print("\nLimpiando recursos...")
     cap.release()
     mp_pose.close()
-    print("✅ Programa finalizado correctamente")
+    print("Programa finalizado correctamente")
 
 
 if __name__ == "__main__":
