@@ -1,44 +1,26 @@
-"""
-guiManager.py - Interfaz Tkinter para AR Shirt
-Contiene la clase ARShirtApp que maneja toda la interfaz gráfica
-"""
 
-import tkinter as tk
-from tkinter import ttk, messagebox
-from PIL import Image, ImageTk
 import cv2
 import numpy as np
+from PyQt5.QtGui import QImage, QPixmap
+from PyQt5.QtCore import Qt
 
 from utils.app_args import args
 from utils.modelRenderer import ModelRenderer
 from utils import twoD_Render
 from utils.poseSmoother import PoseSmoother
-
+from guiManagerDesigner import ARAppDesigner
 # Constantes
 SHOULDER_LEFT = 11
 SHOULDER_RIGHT = 12
 HIP_LEFT = 23
 HIP_RIGHT = 24
 
-class ARApp:
-    """Clase principal de la interfaz Tkinter para AR Shirt"""
+class ARApp(ARAppDesigner):
     
-    def __init__(self, root, cap, mp_pose, mp_drawing, pose_connections, obj_loaded, textures_dir, shirt_path):
-        """
-        Inicializa la aplicación
-        
-        Args:
-            root: Ventana Tkinter principal
-            cap: Capturador de video (cv2.VideoCapture)
-            mp_pose: Objeto MediaPipe Pose
-            obj_loaded: Modelo 3D cargado
-            textures_dir: Directorio de texturas
-            shirt_path: Ruta de la imagen 2D de la playera
-        """
-        self.root = root
-        self.root.title("🎽 AR Shirt - Control Panel")
-        self.root.geometry("1400x900")
-        
+    def __init__(self, cap, mp_pose, mp_drawing, pose_connections, obj_loaded, textures_dir, shirt_path):
+
+        super().__init__()
+
         # Variables de entrada
         self.cap = cap
         self.mp_pose = mp_pose
@@ -74,9 +56,6 @@ class ARApp:
         self.frames_without_pose = 0
         self.max_frames_without_pose = 10  # Máximo de frames sin pose antes de resetear
         
-        # Crear interfaz
-        self.create_ui()
-        
         # Cargar modelo
         self.load_model()
         
@@ -85,205 +64,55 @@ class ARApp:
         
         # Iniciar bucle de video
         self.update_video()
-        
-        # Manejar cierre de ventana
-        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
-    
-    def create_ui(self):
-        """Crea la interfaz Tkinter"""
-        
-        # Frame principal
-        main_frame = ttk.Frame(self.root)
-        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-        
-        # Frame para video (izquierda)
-        video_frame = ttk.LabelFrame(main_frame, text="📹 Vista Previa", padding=10)
-        video_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        
-        self.video_label = tk.Label(video_frame, bg='black', width=640, height=480)
-        self.video_label.pack()
-        
-        # Frame para controles (derecha)
-        control_frame = ttk.LabelFrame(main_frame, text="⚙️ Controles", padding=10)
-        control_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0), expand=False)
-
-        # Agregar scrollbar para controles
-        canvas = tk.Canvas(control_frame, highlightthickness=0, width=175)  # Ancho fijo aquí        
-        scrollbar = ttk.Scrollbar(control_frame, orient="vertical", command=canvas.yview)
-        scrollable_frame = ttk.Frame(canvas)
-        
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
-        
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-        
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-        
-        # ========== TEXTURAS ==========
-        ttk.Label(scrollable_frame, text="🎭 Cambiar Textura:", font=('Arial', 10, 'bold')).pack(pady=(15, 5))
-
-        self.texture_buttons_frame = ttk.Frame(scrollable_frame)
-        self.texture_buttons_frame.pack(fill=tk.X, pady=5)
-
-        # Crear un botón por textura
-        for tex in self.textures_loaded:
-            ttk.Button(
-                self.texture_buttons_frame,
-                text=f"Usar: {tex.replace('_', ' ').title()}",
-                command=lambda t=tex: self.apply_texture(t)
-            ).pack(pady=5, fill=tk.X)
-
-        # ========== BRILLO ==========
-        ttk.Label(scrollable_frame, text="💡 Brillo:", font=('Arial', 10, 'bold')).pack(pady=(15, 5))
-        
-        brightness_frame = ttk.Frame(scrollable_frame)
-        brightness_frame.pack(fill=tk.X, pady=5)
-        
-        self.brightness_slider = ttk.Scale(brightness_frame, from_=0, to=1, orient=tk.HORIZONTAL,
-                                          command=self.update_brightness)
-        self.brightness_slider.set(0.2)
-        self.brightness_slider.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        
-        self.brightness_label = ttk.Label(brightness_frame, text="0.20", width=5)
-        self.brightness_label.pack(side=tk.LEFT, padx=(10, 0))
-        
-        # ========== POSICIÓN Y ==========
-        ttk.Label(scrollable_frame, text="📍 Posición Y:", font=('Arial', 10, 'bold')).pack(pady=(15, 5))
-        
-        y_frame = ttk.Frame(scrollable_frame)
-        y_frame.pack(fill=tk.X, pady=5)
-        
-        self.y_slider = ttk.Scale(y_frame, from_=-1, to=1, orient=tk.HORIZONTAL,
-                                 command=self.update_y_offset)
-        self.y_slider.set(-0.3)
-        self.y_slider.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        
-        self.y_label = ttk.Label(y_frame, text="-0.30", width=5)
-        self.y_label.pack(side=tk.LEFT, padx=(10, 0))
-        
-        # ========== POSICIÓN X ==========
-        ttk.Label(scrollable_frame, text="📍 Posición X:", font=('Arial', 10, 'bold')).pack(pady=(15, 5))
-        
-        x_frame = ttk.Frame(scrollable_frame)
-        x_frame.pack(fill=tk.X, pady=5)
-        
-        self.x_slider = ttk.Scale(x_frame, from_=-1, to=1, orient=tk.HORIZONTAL,
-                                 command=self.update_x_offset)
-        self.x_slider.set(-0.1)
-        self.x_slider.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        
-        self.x_label = ttk.Label(x_frame, text="-0.10", width=5)
-        self.x_label.pack(side=tk.LEFT, padx=(10, 0))
-        
-        # ========== ESCALA ==========
-        ttk.Label(scrollable_frame, text="📏 Referencia Hombros (m):", font=('Arial', 10, 'bold')).pack(pady=(15, 5))
-        
-        scale_frame = ttk.Frame(scrollable_frame)
-        scale_frame.pack(fill=tk.X, pady=5)
-        
-        self.shoulder_slider = ttk.Scale(scale_frame, from_=0.1, to=0.5, orient=tk.HORIZONTAL,
-                                        command=self.update_shoulder_ref)
-        self.shoulder_slider.set(0.25)
-        self.shoulder_slider.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        
-        self.shoulder_label = ttk.Label(scale_frame, text="0.25", width=5)
-        self.shoulder_label.pack(side=tk.LEFT, padx=(10, 0))
-        
-        # ========== INFORMACIÓN ==========
-        self.info_label = ttk.Label(scrollable_frame, text="Cargando...", foreground="blue")
-        self.info_label.pack(pady=(15, 5))
-        
-        # ========== BOTONES FINALES ==========
-        button_frame = ttk.Frame(scrollable_frame)
-        button_frame.pack(fill=tk.X, pady=(15, 0))
-        
-        ttk.Button(button_frame, text="ℹ️  Ayuda", 
-                  command=self.show_help).pack(pady=5)
-        ttk.Button(button_frame, text="🔄 Resetear", 
-                  command=self.reset_controls).pack(pady=5)
-        ttk.Button(button_frame, text="❌ Salir", 
-                  command=self.on_closing).pack(pady=5)
-    
     
     def set_render_mode(self, mode):
-        """Cambia el modo de renderizado"""
         if self.model_renderer:
             self.model_renderer.set_render_mode(mode)
             args.render_mode = mode
-            self.info_label.config(text=f"✅ Modo: {mode.upper()}", foreground="green")
+            self.info_label.SetText(f"Modo: {mode.upper()}", foreground="green")
     
     def apply_texture(self, texture=None):
-        """Aplica la textura seleccionada"""
         if texture and self.model_renderer:
             self.model_renderer.texture_renderer.set_active_texture(texture)
-            self.info_label.config(text=f"✅ Textura: {texture}", foreground="green")
+            self.info_label.SetText(f" Textura: {texture}", foreground="green")
     
     def update_brightness(self, value):
-        """Actualiza el brillo"""
         self.current_brightness = float(value)
-        self.brightness_label.config(text=f"{self.current_brightness:.2f}")
+        self.brightness_label.setText(f"{self.current_brightness:.2f}")
         if self.model_renderer:
             self.model_renderer.brightness = self.current_brightness
     
     def update_y_offset(self, value):
-        """Actualiza el offset Y"""
         self.current_y_offset = float(value)
-        self.y_label.config(text=f"{self.current_y_offset:.2f}")
-    
+        self.y_label.setText(f"{self.current_y_offset:.2f}")    
+
     def update_x_offset(self, value):
-        """Actualiza el offset X"""
         self.current_x_offset = float(value)
-        self.x_label.config(text=f"{self.current_x_offset:.2f}")
+        self.x_label.setText(f"{self.current_x_offset:.2f}")    
+
     
     def update_shoulder_ref(self, value):
-        """Actualiza la referencia de hombros"""
         self.current_shoulder_ref = float(value)
-        self.shoulder_label.config(text=f"{self.current_shoulder_ref:.2f}")
+        self.shoulder_label.setText(f"{self.current_shoulder_ref:.2f}")    
     
     def reset_controls(self):
-        """Resetea todos los controles a valores por defecto"""
-        self.brightness_slider.set(0.2)
-        self.y_slider.set(-0.3)
-        self.x_slider.set(-0.1)
-        self.shoulder_slider.set(0.25)
-        self.info_label.config(text="✅ Configuración reseteada", foreground="green")
-    
-    def show_help(self):
-        """Muestra la ventana de ayuda"""
-        messagebox.showinfo("Ayuda", """
-            🎽 AR SHIRT - CONTROLES
+        self.update_brightness(0.2)
+        self.update_y_offset(-0.3)
+        self.update_x_offset(-0.1)
+        self.update_shoulder_ref(0.25)
 
-            📐 Modo Renderizado:
-              - Textured: Con texturas
-              - Wireframe: Estructura
-              - Solid: Color sólido
+        self.info_label.setText(" Configuración reseteada")
+        self.info_label.setStyleSheet("color: green; font-weight: bold;")
 
-            🎭 Texturas:
-              - Selecciona en el combo
-              - Presiona Aplicar
-
-            💡 Brillo: Ajusta intensidad
-
-            📍 Posición: Mueve X e Y
-
-            📏 Escala: Referencia de hombros
-              (valores menores = playera más grande)
-                    """)
-    
     def load_model(self):
-        """Carga el modelo 3D y las texturas"""
         from utils.objectLoader import ObjModel
 
-        print(f"\n🎪 Cargando modelo 3D")
+        print(f"\n Cargando modelo 3D")
 
         if self.obj_loaded is not None:
             has_uvs = self.obj_loaded.has_texture_coordinates()
-            print(f"   ✅ Modelo cargado: {len(self.obj_loaded.vertices)} vértices")
-            print(f"   🎨 Coordenadas UV: {'Sí' if has_uvs else 'NO'}")
+            print(f"    Modelo cargado: {len(self.obj_loaded.vertices)} vértices")
+            print(f"    Coordenadas UV: {'Sí' if has_uvs else 'NO'}")
 
             FRAME_W = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             FRAME_H = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -297,10 +126,6 @@ class ARApp:
             # cargar texturas
             self.textures_loaded = self._load_textures()
 
-            # limpiar botones previos si existían
-            for widget in self.texture_buttons_frame.winfo_children():
-                widget.destroy()
-
             if self.textures_loaded:
                 # textura seleccionada por args o default
                 if args.texture and args.texture in self.textures_loaded:
@@ -311,22 +136,12 @@ class ARApp:
                 # Activar textura en el renderer
                 self.model_renderer.texture_renderer.set_active_texture(selected)
 
-                # Crear botones
-                for tex in self.textures_loaded:
-                    ttk.Button(
-                        self.texture_buttons_frame,
-                        text=tex,
-                        command=lambda t=tex: self.apply_texture(t)
-                    ).pack(pady=3, fill=tk.X)
-
-                self.info_label.config(text=f"✅ Modelo cargado", foreground="green")
 
     
     def _load_textures(self):
-        """Carga las texturas disponibles"""
         textures_loaded = []
         
-        print(f"\n🎨 Cargando texturas desde archivos...")
+        print(f"\n Cargando texturas desde archivos...")
 
         texture_pairs = [
             ("new_shirt", "pclShirt_without_CLOTHTEXT.png", "new_shirt_bake_normals.png"),
@@ -341,23 +156,21 @@ class ARApp:
             
             if os.path.exists(diffuse_path):
                 if self.model_renderer.texture_renderer.load_texture(tex_name, diffuse_path, "diffuse"):
-                    print(f"✅ Textura difusa '{tex_name}' cargada")
+                    print(f" Textura difusa '{tex_name}' cargada")
                     
                     if os.path.exists(normal_path):
                         if self.model_renderer.texture_renderer.load_texture(tex_name, normal_path, "normal"):
-                            print(f"   🌟 Mapa de normales cargado")
+                            print(f"    Mapa de normales cargado")
                     
                     textures_loaded.append(tex_name)
         
         return textures_loaded
-    
     def update_video(self):
         """Actualiza el video en tiempo real"""
         ret, frame = self.cap.read()
         if not ret:
-            self.info_label.config(text="❌ No se pudo capturar video", foreground="red")
-            if self.running:
-                self.root.after(100, self.update_video)
+            self.info_label.setText(" No se pudo capturar video")
+            self.info_label.setStyleSheet("color: red; font-weight: bold;")
             return
         
         CAMERA_ID = 2
@@ -382,16 +195,13 @@ class ARApp:
         if results.pose_landmarks:
             landmarks = results.pose_landmarks.landmark
 
-            mp_drawing = self.mp_drawing
-            pose_connections = self.pose_connections
-
             if args.debug and results.pose_landmarks:
-                mp_drawing.draw_landmarks(
+                self.mp_drawing.draw_landmarks(
                    frame,
                    results.pose_landmarks,
-                   pose_connections,
-                   mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=2, circle_radius=2),
-                   mp_drawing.DrawingSpec(color=(255, 0, 0), thickness=2)
+                   self.pose_connections,
+                   self.mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=2, circle_radius=2),
+                   self.mp_drawing.DrawingSpec(color=(255, 0, 0), thickness=2)
                 )
             
             left_shoulder_visible = landmarks[SHOULDER_LEFT].visibility > 0.8
@@ -403,7 +213,7 @@ class ARApp:
             visible_hips = left_hip_visible and right_hip_visible
             
             if visible_shoulders and visible_hips and self.model_renderer:
-                self.frames_without_pose = 0  # AGREGAR
+                self.frames_without_pose = 0
 
                 # Calcular coordenadas del torso
                 left_shoulder_x = int(landmarks[SHOULDER_LEFT].x * w)
@@ -480,30 +290,27 @@ class ARApp:
                             if img_3d is not None:
                                 frame = twoD_Render.overlay_transparent(frame, img_3d, x, y)
                         except Exception as e:
-                            print(f"âŒ Error al superponer playera: {e}")
+                            print(f" Error al superponer playera: {e}")
             else:
-                # AGREGAR - Usar última pose válida si no se detecta
+                # Usar última pose válida si no se detecta
                 self.frames_without_pose += 1
                 if self.frames_without_pose > self.max_frames_without_pose:
                     self.pose_smoother.reset()
                     self.frames_without_pose = 0
         
-        
         # Agregar FPS
         cv2.putText(frame, f"FPS: {self.fps:.1f}", (10, 30), 
                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
         
-        # Convertir para Tkinter
+        # Convertir BGR a RGB para Qt
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        frame_pil = Image.fromarray(frame_rgb)
-        frame_tk = ImageTk.PhotoImage(frame_pil.resize((640, 480)))
+        h, w, ch = frame_rgb.shape
+        bytes_per_line = ch * w
+        qt_image = QImage(frame_rgb.data, w, h, bytes_per_line, QImage.Format_RGB888)
         
-        self.video_label.config(image=frame_tk)
-        self.video_label.image = frame_tk
-        
-        # Continuar actualizando
-        if self.running:
-            self.root.after(30, self.update_video)
+        # Mostrar en label
+        pixmap = QPixmap.fromImage(qt_image)
+        self.video_label.setPixmap(pixmap.scaled(640, 480, Qt.KeepAspectRatio))
     
     def _render_shirt(self, torso_width, torso_height):
         """Renderiza la playera 3D"""

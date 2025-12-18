@@ -1,17 +1,12 @@
-"""
-main.py - Punto de entrada principal
-Inicializa MediaPipe y la GUI Tkinter
-"""
-
 import os
-import tkinter as tk
+import sys
+from PyQt5.QtWidgets import QApplication
 import cv2
 import mediapipe as mp
 
 from utils.objectLoader import ObjModel
 from utils.app_args import args
 from guiManager import ARApp
-
 # Constantes
 CAMERA_ID = 0
 
@@ -20,7 +15,6 @@ shirt_path = os.path.expanduser('~/AR_python/Aumented_Reality/models/Black_T_Shi
 obj_path = os.path.expanduser('~/AR_python/Aumented_Reality/models/obj/new_shirt.obj')
 
 def main():
-    
     # Inicializar cámara
     cap = cv2.VideoCapture(CAMERA_ID)
     
@@ -60,26 +54,33 @@ def main():
     pose_connections = mp.solutions.pose.POSE_CONNECTIONS
 
     print(f"MediaPipe inicializado")
-    root = tk.Tk()
     
-    # Crear aplicación
-    app = ARApp(
-        root=root,
+    # Crear aplicación Qt
+    app = QApplication(sys.argv)
+    
+    # Crear ventana principal
+    window = ARApp(
         cap=cap,
         mp_pose=mp_pose,
-        mp_drawing = mp_drawing,
-        pose_connections = pose_connections,
+        mp_drawing=mp_drawing,
+        pose_connections=pose_connections,
         obj_loaded=obj_loaded,
         textures_dir=args.textures_dir,
         shirt_path=shirt_path
-    )    
-    root.mainloop()
+    )
+    
+    window.show()
+    
+    # Ejecutar aplicación
+    exit_code = app.exec_()
     
     # Limpiar
     print("\nLimpiando recursos...")
     cap.release()
     mp_pose.close()
     print("Programa finalizado correctamente")
+    
+    sys.exit(exit_code)
 
 
 if __name__ == "__main__":

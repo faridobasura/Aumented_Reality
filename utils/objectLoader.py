@@ -12,7 +12,7 @@ OBJ_PATH = os.path.expanduser('~/AR_python/Aumented_Reality/t_shirt_model/t_shir
 
 @dataclass
 class ObjModel:
-    """Modelo 3D con texturas y normales"""
+
     vertices: np.ndarray
     faces: np.ndarray
     uvs: np.ndarray = None  # Coordenadas UV
@@ -30,7 +30,6 @@ class ObjModel:
     
     @staticmethod
     def load_obj(path):
-        """Carga archivo OBJ con soporte para texturas y normales"""
         vertices = []
         faces = []
         uvs = []
@@ -174,17 +173,14 @@ class ObjModel:
         return normalized
     
     def has_texture_coordinates(self):
-        """Verifica si el modelo tiene coordenadas UV"""
         return (self.uvs is not None and len(self.uvs) > 0 and
                 self.face_uvs is not None)
     
     def has_normals(self):
-        """Verifica si el modelo tiene normales"""
         return (self.normals is not None and len(self.normals) > 0 and
                 self.face_normals is not None)
     
     def generate_normals(self):
-        """Genera normales planas si el modelo no las tiene"""
         if self.has_normals():
             return
         
@@ -233,7 +229,6 @@ class ObjModel:
         print(f" Normales generadas: {len(self.normals)} normales")
     
     def get_vertex_count(self):
-        """Obtiene número total de vértices después de expandir caras"""
         total = 0
         for face in self.faces:
             if len(face) == 3:
@@ -243,7 +238,7 @@ class ObjModel:
         return total
     
     def print_info(self):
-        print("\n📊 INFORMACIÓN DEL MODELO:")
+        print("\n INFORMACIÓN DEL MODELO:")
         print(f"   Vértices: {len(self.vertices)}")
         print(f"   Caras: {len(self.faces)}")
         print(f"   Coordenadas UV: {'SÍ' if self.has_texture_coordinates() else 'NO'}")
@@ -279,7 +274,6 @@ def load_obj():
     return model.vertices, model.faces
 
 def init_gl(width, height):
-    """Inicializar OpenGL (para compatibilidad)"""
     glClearColor(0.0, 0.0, 0.0, 0.0)
     glClearDepth(1.0)
     glDepthFunc(GL_LESS)
@@ -292,7 +286,6 @@ def init_gl(width, height):
     glMatrixMode(GL_MODELVIEW)
 
 def render_to_opencv(vertices, faces):
-    """Renderizar y convertir a imagen OpenCV (para compatibilidad)"""
     width, height = 800, 600
     
     pygame.init()
