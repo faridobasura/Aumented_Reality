@@ -7,12 +7,15 @@ import mediapipe as mp
 from utils.objectLoader import ObjModel
 from utils.app_args import args
 from guiManager import ARApp
+
 # Constantes
 CAMERA_ID = 0
+WINDOW_WIDTH = 768
+WINDOW_HEIGHT = 1024
 
 # Rutas de archivos
-shirt_path = os.path.expanduser('~/AR_python/Aumented_Reality/models/Black_T_Shirt_PNG_Clip_Art-3107.png')
-obj_path = os.path.expanduser('~/AR_python/Aumented_Reality/models/obj/new_shirt.obj')
+TWOD_SHIRT_PATH = os.path.expanduser('~/AR_python/Aumented_Reality/models/Black_T_Shirt_PNG_Clip_Art-3107.png')
+SHIRT_OBJ_PATH = os.path.expanduser('~/AR_python/Aumented_Reality/models/obj/new_shirt.obj')
 
 def main():
     # Inicializar cámara
@@ -21,19 +24,16 @@ def main():
     if not cap.isOpened():
         print("❌ No se pudo abrir la cámara")
         return
-    
-    # Configurar resolución
-    DESIRED_WIDTH = 720
-    DESIRED_HEIGHT = 1024
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, DESIRED_WIDTH)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, DESIRED_HEIGHT)
+
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, WINDOW_WIDTH)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, WINDOW_HEIGHT)
     
     FRAME_W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     FRAME_H = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     
     # Cargar modelo 3D
     try:
-        obj_loaded = ObjModel.load_obj(obj_path)
+        obj_loaded = ObjModel.load_obj(SHIRT_OBJ_PATH)
         print(f"Modelo cargado: {len(obj_loaded.vertices)} vértices")
     except Exception as e:
         print(f"Error cargando modelo: {e}")
@@ -66,7 +66,7 @@ def main():
         pose_connections=pose_connections,
         obj_loaded=obj_loaded,
         textures_dir=args.textures_dir,
-        shirt_path=shirt_path
+        twoD_shirth_path=TWOD_SHIRT_PATH
     )
     
     window.show()

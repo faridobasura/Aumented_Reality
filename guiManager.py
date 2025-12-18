@@ -9,6 +9,7 @@ from utils.modelRenderer import ModelRenderer
 from utils import twoD_Render
 from utils.poseSmoother import PoseSmoother
 from guiManagerDesigner import ARAppDesigner
+
 # Constantes
 SHOULDER_LEFT = 11
 SHOULDER_RIGHT = 12
@@ -17,7 +18,7 @@ HIP_RIGHT = 24
 
 class ARApp(ARAppDesigner):
     
-    def __init__(self, cap, mp_pose, mp_drawing, pose_connections, obj_loaded, textures_dir, shirt_path):
+    def __init__(self, cap, mp_pose, mp_drawing, pose_connections, obj_loaded, textures_dir, twoD_shirth_path):
 
         super().__init__()
 
@@ -26,7 +27,7 @@ class ARApp(ARAppDesigner):
         self.mp_pose = mp_pose
         self.obj_loaded = obj_loaded
         self.textures_dir = textures_dir
-        self.shirt_path = shirt_path
+        self.shirt_path = twoD_shirth_path
         
         # Variables de aplicación
         self.model_renderer = None
@@ -60,7 +61,7 @@ class ARApp(ARAppDesigner):
         self.load_model()
         
         # Cargar imagen 2D
-        self.shirt_png = cv2.imread(shirt_path, cv2.IMREAD_UNCHANGED)
+        self.shirt_png = cv2.imread(twoD_shirth_path, cv2.IMREAD_UNCHANGED)
         
         # Iniciar bucle de video
         self.update_video()
@@ -117,8 +118,8 @@ class ARApp(ARAppDesigner):
             FRAME_W = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             FRAME_H = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-            render_width = max(512, min(FRAME_W, 1024))
-            render_height = max(512, min(FRAME_H, 1024))
+            render_width = max(720, min(FRAME_W, 1024))
+            render_height = max(720, min(FRAME_H, 1024))
 
             self.model_renderer = ModelRenderer(width=render_width, height=render_height, obj=self.obj_loaded)
             self.model_renderer.set_render_mode(args.render_mode)
@@ -307,13 +308,18 @@ class ARApp(ARAppDesigner):
         h, w, ch = frame_rgb.shape
         bytes_per_line = ch * w
         qt_image = QImage(frame_rgb.data, w, h, bytes_per_line, QImage.Format_RGB888)
-        
-        # Mostrar en label
+
+        # Obtener el tamaño del QLabel
+        label_width = self.video_label.width()
+        label_height = self.video_label.height()
+
+        # ESCALAR PARA OCUPAR TODO EL ESPACIO (sin mantener aspecto)
         pixmap = QPixmap.fromImage(qt_image)
-        self.video_label.setPixmap(pixmap.scaled(640, 480, Qt.KeepAspectRatio))
+        scaled_pixmap = pixmap.scaled(label_width, label_height, Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
+
+        self.video_label.setPixmap(scaled_pixmap)
     
     def _render_shirt(self, torso_width, torso_height):
-        """Renderiza la playera 3D"""
         if self.model_renderer is None:
             return None
 
@@ -328,8 +334,7 @@ class ARApp(ARAppDesigner):
         return rgba
     
     def on_closing(self):
-        """Maneja el cierre de la aplicación"""
-        print("\n🛑 Cerrando aplicación...")
+        print("\n Cerrando aplicación...")
         self.running = False
         if self.model_renderer:
             self.model_renderer.cleanup()

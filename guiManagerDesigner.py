@@ -7,15 +7,15 @@ import cv2
 import numpy as np
 
 from utils.app_args import args
-from utils.modelRenderer import ModelRenderer
-from utils import twoD_Render
-from utils.poseSmoother import PoseSmoother
 
 # Constantes
 SHOULDER_LEFT = 11
 SHOULDER_RIGHT = 12
 HIP_LEFT = 23
 HIP_RIGHT = 24
+
+WINDOW_WIDTH = 768
+WINDOW_HEIGHT = 1024
 
 class ARAppDesigner(QMainWindow):
     
@@ -32,7 +32,7 @@ class ARAppDesigner(QMainWindow):
     
     def init_ui(self):
         self.setWindowTitle("Espejo AR")
-        self.setGeometry(100, 100, 1400, 900)
+        self.setGeometry(int(WINDOW_WIDTH*0.22), int(WINDOW_WIDTH*0.77), WINDOW_WIDTH, WINDOW_HEIGHT)
         
         # Widget central
         central_widget = QWidget()
@@ -41,58 +41,96 @@ class ARAppDesigner(QMainWindow):
         # Layout principal horizontal
         main_layout = QHBoxLayout(central_widget)
         
-        # === PANEL IZQUIERDO: VIDEO ===
+        # === PANEL central: VIDEO ===
         video_group = QGroupBox(" Vista Previa")
         video_layout = QVBoxLayout()
         
         self.video_label = QLabel()
-        self.video_label.setMinimumSize(640, 480)
-        self.video_label.setMaximumSize(640, 480)
+        self.video_label.setFixedSize(int(WINDOW_WIDTH*0.625), int(WINDOW_HEIGHT*0.9))
         self.video_label.setStyleSheet("background-color: black;")
         self.video_label.setScaledContents(True)
         
         video_layout.addWidget(self.video_label)
         video_group.setLayout(video_layout)
-        main_layout.addWidget(video_group, 2)
         
-        # === PANEL DERECHO: CONTROLES ===
-        control_group = QGroupBox(" Controles")
-        control_main_layout = QVBoxLayout()
-        
+
+        ## Panel izquierdo
+        control_group_left = QGroupBox(" Controles")
+        control_left_main_layout = QVBoxLayout()
+
         # Scroll area para controles
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setMaximumWidth(250)
+        scroll.setMaximumWidth(int(WINDOW_WIDTH*0.25))
         
-        scroll_widget = QWidget()
-        scroll_layout = QVBoxLayout(scroll_widget)
-        
-        self.create_texture_section(scroll_layout)
-        
-        self.create_brightness_section(scroll_layout)
-        
-        self.create_y_position_section(scroll_layout)
-        
-        self.create_x_position_section(scroll_layout)
-        
-        self.create_scale_section(scroll_layout)
-        
+        scroll_widget_left_area = QWidget()
+        scroll_layout_left_area = QVBoxLayout(scroll_widget_left_area)
+
+        self.create_control_sections(scroll_layout_left_area)
+
         self.info_label = QLabel("")
-        #self.info_label.setStyleSheet("color: blue; font-weight: bold;")
         self.info_label.setAlignment(Qt.AlignCenter)
-        scroll_layout.addWidget(self.info_label)
+        scroll_layout_left_area.addWidget(self.info_label)
+
+        scroll_layout_left_area.addStretch()
+        scroll.setWidget(scroll_widget_left_area)
+        control_left_main_layout.addWidget(scroll)
+        control_group_left.setLayout(control_left_main_layout)
+
+        ## Panel derecho
+
+        control_group_right = QGroupBox(" Controles")
+        control_rigth_main_layout = QVBoxLayout()
+
+        # Scroll area para controles
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setMaximumWidth(int(WINDOW_WIDTH*0.25))
         
-        # === BOTONES FINALES ===
-        self.create_action_buttons(scroll_layout)
-        
-        scroll_layout.addStretch()
-        scroll.setWidget(scroll_widget)
-        control_main_layout.addWidget(scroll)
-        control_group.setLayout(control_main_layout)
-        main_layout.addWidget(control_group, 1)
+        scroll_widget_rigth_area = QWidget()
+        scroll_layout_rigth_area = QVBoxLayout(scroll_widget_rigth_area)
+
+        self.create_control_sections(scroll_layout_rigth_area)
+
+        self.info_label = QLabel("")
+        self.info_label.setAlignment(Qt.AlignCenter)
+        scroll_layout_rigth_area.addWidget(self.info_label)
+
+        scroll_layout_rigth_area.addStretch()
+        scroll.setWidget(scroll_widget_rigth_area)
+        control_rigth_main_layout.addWidget(scroll)
+        control_group_right.setLayout(control_rigth_main_layout)
+
+        #control_group.setFixedSize(400, 600)  # Ancho fijo: 400px, Alto fijo: 600px
+        #video_group.setFixedSize(800, 600)
+
+        # IMPORTANTE: Quita los weights del main_layout
+        main_layout.addWidget(control_group_left)
+        main_layout.addWidget(video_group)
+        main_layout.addWidget(control_group_right)
+
+
+
+        if args.debug:
+            self.setStyleSheet("border: 2px solid black;")
     
+
+    def create_control_sections(self, layout):
+
+        self.create_texture_section(layout)
+        
+        self.create_brightness_section(layout)
+        
+        self.create_y_position_section(layout)
+        
+        self.create_x_position_section(layout)
+        
+        self.create_scale_section(layout)
+        
+        self.create_action_buttons(layout)
+
     def create_texture_section(self, layout):
-        """Crea la sección de texturas"""
+
         title = QLabel(" Cambiar Textura:")
         title.setFont(QFont("Arial", 10, QFont.Bold))
         layout.addWidget(title)
@@ -109,7 +147,7 @@ class ARAppDesigner(QMainWindow):
         layout.addWidget(line)
     
     def create_brightness_section(self, layout):
-        """Crea la sección de brillo"""
+
         title = QLabel(" Brillo:")
         title.setFont(QFont("Arial", 10, QFont.Bold))
         layout.addWidget(title)
@@ -136,7 +174,7 @@ class ARAppDesigner(QMainWindow):
         layout.addWidget(line)
     
     def create_y_position_section(self, layout):
-        """Crea la sección de posición Y"""
+
         title = QLabel(" Posición Y:")
         title.setFont(QFont("Arial", 10, QFont.Bold))
         layout.addWidget(title)
@@ -163,7 +201,7 @@ class ARAppDesigner(QMainWindow):
         layout.addWidget(line)
     
     def create_x_position_section(self, layout):
-        """Crea la sección de posición X"""
+
         title = QLabel(" Posición X:")
         title.setFont(QFont("Arial", 10, QFont.Bold))
         layout.addWidget(title)
