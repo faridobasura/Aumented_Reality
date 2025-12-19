@@ -1,13 +1,14 @@
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                               QLabel, QPushButton, QSlider, QGroupBox, 
-                              QScrollArea, QMessageBox, QFrame)
-from PyQt5.QtCore import QTimer, Qt
-from PyQt5.QtGui import QImage, QPixmap, QFont
+                              QScrollArea, QMessageBox, QFrame, QGridLayout)
+from PyQt5.QtCore import QTimer, Qt, QSize
+from PyQt5.QtGui import QImage, QPixmap, QFont, QIcon
 import cv2
 import numpy as np
 
 from utils.app_args import args
-
+from properties.properties import properties
+import logging
 # Constantes
 SHOULDER_LEFT = 11
 SHOULDER_RIGHT = 12
@@ -17,6 +18,7 @@ HIP_RIGHT = 24
 WINDOW_WIDTH = 1204
 WINDOW_HEIGHT = 1024
 
+logger = logging.getLogger(__name__)
 class ARAppDesigner(QMainWindow):
     
     def __init__(self):
@@ -24,7 +26,7 @@ class ARAppDesigner(QMainWindow):
 
         # Crear interfaz
         self.init_ui()
-        
+
         # Timer para actualizar video
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_video)
@@ -62,15 +64,12 @@ class ARAppDesigner(QMainWindow):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setMaximumWidth(int(WINDOW_WIDTH*0.25))
+        scroll.setMinimumHeight(int(WINDOW_HEIGHT*0.9))
         
         scroll_widget_left_area = QWidget()
         scroll_layout_left_area = QVBoxLayout(scroll_widget_left_area)
 
-        self.create_control_sections(scroll_layout_left_area)
-
-        self.info_label = QLabel("")
-        self.info_label.setAlignment(Qt.AlignCenter)
-        scroll_layout_left_area.addWidget(self.info_label)
+        self.create_catalog_section(scroll_layout_left_area)
 
         scroll_layout_left_area.addStretch()
         scroll.setWidget(scroll_widget_left_area)
@@ -86,11 +85,12 @@ class ARAppDesigner(QMainWindow):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setMaximumWidth(int(WINDOW_WIDTH*0.25))
+        scroll.setMinimumHeight(int(WINDOW_HEIGHT*0.9))
         
         scroll_widget_rigth_area = QWidget()
         scroll_layout_rigth_area = QVBoxLayout(scroll_widget_rigth_area)
 
-        self.create_control_sections(scroll_layout_rigth_area)
+        self.create_catalog_section(scroll_layout_rigth_area)
 
         self.info_label = QLabel("")
         self.info_label.setAlignment(Qt.AlignCenter)
@@ -114,6 +114,57 @@ class ARAppDesigner(QMainWindow):
         if args.debug:
             self.setStyleSheet("border: 2px solid black;")
     
+    def create_catalog_section(self, layout):
+
+        title = QLabel("Cambiar Modelo:")
+        title.setFont(QFont("Arial", 10, QFont.Bold))
+        layout.addWidget(title)
+
+        catalog_container = QWidget()
+        grid = QGridLayout(catalog_container)
+        grid.setSpacing(10)
+
+        BUTTON_SIZE = QSize(int(WINDOW_WIDTH*0.1), int(WINDOW_HEIGHT*0.2))
+
+        self.catalog = [
+            {
+                "name": "Playera Blanca",
+                "texture": "new_shirt",
+                "image": properties.resources.shirt_white
+            },
+            {
+                "name": "Playera Spiderman",
+                "texture": "shirt_spidey",
+                "image": properties.resources.shirt_spidey
+            },
+            {
+                "name": "Playera New Order",
+                "texture": "shirt_new_order",
+                "image": properties.resources.shirt_pcl
+            }
+        ]
+
+        for index, item in enumerate(self.catalog):
+
+            btn = QPushButton()
+            btn.setToolTip(item["name"])
+            btn.setMinimumSize(int(WINDOW_WIDTH*0.1), int(WINDOW_HEIGHT*0.2))
+
+            image_path = str(item["image"])
+            pixmap = QPixmap(image_path)
+            
+            if pixmap.isNull():
+                logger.warning(f" No se pudo cargar: {item['image']}")
+
+            btn.setIcon(QIcon(pixmap))
+            btn.setIconSize(QSize(int(WINDOW_WIDTH*0.1), int(WINDOW_HEIGHT*0.2)))
+
+            btn.clicked.connect(lambda checked=False, tex=item["texture"]: self.apply_texture(tex))
+            
+            grid.setColumnStretch(0, 1)
+            grid.addWidget(btn, index, 0)
+
+        layout.addWidget(catalog_container)
 
     def create_control_sections(self, layout):
 
@@ -267,7 +318,17 @@ class ARAppDesigner(QMainWindow):
         layout.addWidget(exit_btn)
     
     def apply_texture(self, texture):
-        pass
+        if not self.model_renderer:
+            return
+
+        if texture not in self.textures_loaded:
+            print(f"Textura no cargada: {texture}")
+            return
+
+        self.model_renderer.texture_renderer.set_active_texture(texture)
+
+        #self.info_label.setText(f"Textura activa: {texture}")
+        #self.info_label.setStyleSheet("color: green; font-weight: bold;")
     
     def update_brightness(self, value):
         pass

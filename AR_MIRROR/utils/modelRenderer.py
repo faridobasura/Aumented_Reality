@@ -360,9 +360,9 @@ class ModelRenderer:
         valid_modes = ["wireframe", "textured", "solid"]
         if mode in valid_modes:
             self.render_mode = mode
-            logger.info(f" Modo de renderizado cambiado a: {mode}")
+            #logger.info(f" Modo de renderizado cambiado a: {mode}")
         else:
-            logger.info(f" Modo inválido: {mode}. Usando 'wireframe'")
+            #logger.info(f" Modo inválido: {mode}. Usando 'wireframe'")
             self.render_mode = "wireframe"
     
     def _init_gl_objects(self):
@@ -797,8 +797,6 @@ class ModelRenderer:
         model_points_arr = np.array(model_points)
         target_points_arr = np.array(target_points)
         
-        logger.info(f" Alineando {len(model_points_arr)} puntos")
-
         # Calcular centroides
         model_centroid = np.mean(model_points_arr, axis=0)
         target_centroid = np.mean(target_points_arr, axis=0)

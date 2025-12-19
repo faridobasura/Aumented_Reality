@@ -77,11 +77,6 @@ class ARApp(ARAppDesigner):
             args.render_mode = mode
             self.info_label.SetText(f"Modo: {mode.upper()}", foreground="green")
     
-    def apply_texture(self, texture=None):
-        if texture and self.model_renderer:
-            self.model_renderer.texture_renderer.set_active_texture(texture)
-            self.info_label.SetText(f" Textura: {texture}", foreground="green")
-    
     def update_brightness(self, value):
         self.current_brightness = float(value)
         self.brightness_label.setText(f"{self.current_brightness:.2f}")
@@ -151,7 +146,7 @@ class ARApp(ARAppDesigner):
         logger.info(f" Cargando texturas desde archivos...")
 
         texture_pairs = [
-            ("new_shirt", "pclShirt_without_CLOTHTEXT.png", "new_shirt_bake_normals.png"),
+            ("new_shirt", "new_shirt_bake_diffuse.png", "new_shirt_bake_normals.png"),
             ("shirt_spidey", "shirt_spidey_diffuse.png", "new_shirt_bake_normals.png"),
             ("shirt_new_order", "shirt_diffuse_plc.png", "new_shirt_bake_normals.png"),
         ]
