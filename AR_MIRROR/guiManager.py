@@ -41,7 +41,7 @@ class ARApp(ARAppDesigner):
         self.running = True
         
         # Variables de control
-        self.current_brightness = 0.2
+        self.current_brightness = 0.1
         self.current_y_offset = -0.3
         self.current_x_offset = -0.1
         self.current_shoulder_ref = 0.25
@@ -102,8 +102,8 @@ class ARApp(ARAppDesigner):
         self.update_x_offset(-0.1)
         self.update_shoulder_ref(0.25)
 
-        self.info_label.setText(" Configuración reseteada")
-        self.info_label.setStyleSheet("color: green; font-weight: bold;")
+        #self.info_label.setText(" Configuración reseteada")
+        #self.info_label.setStyleSheet("color: green; font-weight: bold;")
 
     def load_model(self):
         from utils.objectLoader import ObjModel

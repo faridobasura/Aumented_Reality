@@ -15,10 +15,35 @@ SHOULDER_RIGHT = 12
 HIP_LEFT = 23
 HIP_RIGHT = 24
 
-WINDOW_WIDTH = 1204
+WINDOW_WIDTH = 1024
 WINDOW_HEIGHT = 1024
 
 logger = logging.getLogger(__name__)
+
+class DebugWindow(QMainWindow):
+
+    def __init__(self, controller):
+        super().__init__()
+
+        self.controller = controller  # 👈 referencia a la clase hija
+
+        self.setWindowTitle("Controles Debug")
+        self.setGeometry(int(WINDOW_WIDTH*0.35), int(WINDOW_HEIGHT*0.15), WINDOW_WIDTH, int(WINDOW_HEIGHT*0.35))
+
+        central = QWidget()
+        layout = QVBoxLayout(central)
+
+        self.info_label = QLabel(" Debug Mode Active")
+        self.info_label.setStyleSheet("color: red; font-weight: bold;")
+
+        self.controller.create_control_section(layout)
+
+        self.setCentralWidget(central)
+
+    def create_control_section(self, layout):
+        btn = QPushButton("Reset Tracking")
+        btn.clicked.connect(self.controller.reset_tracking)
+        layout.addWidget(btn)
 class ARAppDesigner(QMainWindow):
     
     def __init__(self):
@@ -31,40 +56,50 @@ class ARAppDesigner(QMainWindow):
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_video)
         self.timer.start(30)  # 30ms ~ 33 FPS
+
+        if args.debug:
+            self._create_debug_window()
+
+    def _create_debug_window(self):
+        
+        self.debug_window = DebugWindow(controller=self)
+        self.debug_window.show()
+        logger.info("Ventana debug abierta")
     
     def init_ui(self):
         self.setWindowTitle("Espejo AR")
-        self.setGeometry(int(WINDOW_WIDTH*0.22), int(WINDOW_WIDTH*0.77), WINDOW_WIDTH, WINDOW_HEIGHT)
-        
-        # Widget central
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
+
+        logger.warning(" Iniciando Interfaz Gráfica...")
+        self.setGeometry(int(WINDOW_WIDTH*0.45), int(WINDOW_HEIGHT*0.9), WINDOW_WIDTH, WINDOW_HEIGHT)
         
         # Layout principal horizontal
-        main_layout = QHBoxLayout(central_widget)
+        main_widget = QWidget()
+        main_layout = QHBoxLayout()
         
         # === PANEL central: VIDEO ===
-        video_group = QGroupBox(" Vista Previa")
-        video_layout = QVBoxLayout()
-        
+        central_panel_widget = QWidget()
+        central_panel_layout = QVBoxLayout(central_panel_widget)
+
+        self.video_container = QGroupBox("Video en Vivo")
+        video_inner_layout = QVBoxLayout(self.video_container)
+
         self.video_label = QLabel()
-        self.video_label.setFixedSize(int(WINDOW_WIDTH*0.625), int(WINDOW_HEIGHT*0.9))
+        self.video_label.setMinimumSize(int(WINDOW_WIDTH*0.625), int(WINDOW_HEIGHT*0.9))
         self.video_label.setStyleSheet("background-color: black;")
         self.video_label.setScaledContents(True)
-        
-        video_layout.addWidget(self.video_label)
-        video_group.setLayout(video_layout)
-        
+        video_inner_layout.addWidget(self.video_label)
+        central_panel_layout.addWidget(self.video_container)              
+        central_panel_layout.addStretch()
 
         ## Panel izquierdo
-        control_group_left = QGroupBox(" Controles")
-        control_left_main_layout = QVBoxLayout()
+        left_panel_widget = QWidget()
+        left_panel_layout = QVBoxLayout(left_panel_widget)
 
         # Scroll area para controles
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setMaximumWidth(int(WINDOW_WIDTH*0.25))
-        scroll.setMinimumHeight(int(WINDOW_HEIGHT*0.9))
+        left_scroll = QScrollArea()
+        left_scroll.setWidgetResizable(True)
+        left_scroll.setMaximumWidth(int(WINDOW_WIDTH*0.25))
+        left_scroll.setMinimumHeight(int(WINDOW_HEIGHT*0.9))
         
         scroll_widget_left_area = QWidget()
         scroll_layout_left_area = QVBoxLayout(scroll_widget_left_area)
@@ -72,44 +107,35 @@ class ARAppDesigner(QMainWindow):
         self.create_catalog_section(scroll_layout_left_area)
 
         scroll_layout_left_area.addStretch()
-        scroll.setWidget(scroll_widget_left_area)
-        control_left_main_layout.addWidget(scroll)
-        control_group_left.setLayout(control_left_main_layout)
+        left_scroll.setWidget(scroll_widget_left_area)
+        left_panel_layout.addWidget(left_scroll)
 
         ## Panel derecho
 
-        control_group_right = QGroupBox(" Controles")
-        control_rigth_main_layout = QVBoxLayout()
+        right_panel_widget = QWidget()
+        right_panel_layout = QVBoxLayout(right_panel_widget)
 
         # Scroll area para controles
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setMaximumWidth(int(WINDOW_WIDTH*0.25))
-        scroll.setMinimumHeight(int(WINDOW_HEIGHT*0.9))
+        right_scroll = QScrollArea()
+        right_scroll.setWidgetResizable(True)
+        right_scroll.setMaximumWidth(int(WINDOW_WIDTH*0.25))
+        right_scroll.setMinimumHeight(int(WINDOW_HEIGHT*0.9))
         
-        scroll_widget_rigth_area = QWidget()
-        scroll_layout_rigth_area = QVBoxLayout(scroll_widget_rigth_area)
+        scroll_widget_right_area = QWidget()
+        scroll_layout_right_area = QVBoxLayout(scroll_widget_right_area)
 
-        self.create_catalog_section(scroll_layout_rigth_area)
+        self.create_catalog_section(scroll_layout_right_area)
 
-        self.info_label = QLabel("")
-        self.info_label.setAlignment(Qt.AlignCenter)
-        scroll_layout_rigth_area.addWidget(self.info_label)
+        scroll_layout_right_area.addStretch()
+        right_scroll.setWidget(scroll_widget_right_area)
+        right_panel_layout.addWidget(right_scroll)
 
-        scroll_layout_rigth_area.addStretch()
-        scroll.setWidget(scroll_widget_rigth_area)
-        control_rigth_main_layout.addWidget(scroll)
-        control_group_right.setLayout(control_rigth_main_layout)
+        main_layout.addWidget(left_panel_widget)
+        main_layout.addWidget(central_panel_widget)
+        main_layout.addWidget(right_panel_widget)
 
-        #control_group.setFixedSize(400, 600)  # Ancho fijo: 400px, Alto fijo: 600px
-        #video_group.setFixedSize(800, 600)
-
-        # IMPORTANTE: Quita los weights del main_layout
-        main_layout.addWidget(control_group_left)
-        main_layout.addWidget(video_group)
-        main_layout.addWidget(control_group_right)
-
-
+        main_widget.setLayout(main_layout)
+        self.setCentralWidget(main_widget)
 
         if args.debug:
             self.setStyleSheet("border: 2px solid black;")
@@ -166,9 +192,9 @@ class ARAppDesigner(QMainWindow):
 
         layout.addWidget(catalog_container)
 
-    def create_control_sections(self, layout):
+    def create_control_section(self, layout):
 
-        self.create_texture_section(layout)
+
         
         self.create_brightness_section(layout)
         
@@ -179,23 +205,6 @@ class ARAppDesigner(QMainWindow):
         self.create_scale_section(layout)
         
         self.create_action_buttons(layout)
-
-    def create_texture_section(self, layout):
-
-        title = QLabel(" Cambiar Textura:")
-        title.setFont(QFont("Arial", 10, QFont.Bold))
-        layout.addWidget(title)
-        
-        self.texture_buttons_frame = QWidget()
-        self.texture_buttons_layout = QVBoxLayout(self.texture_buttons_frame)
-        self.texture_buttons_layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self.texture_buttons_frame)
-        
-        # Separador
-        line = QFrame()
-        line.setFrameShape(QFrame.HLine)
-        line.setFrameShadow(QFrame.Sunken)
-        layout.addWidget(line)
     
     def create_brightness_section(self, layout):
 
@@ -305,6 +314,7 @@ class ARAppDesigner(QMainWindow):
         layout.addWidget(line)
     
     def create_action_buttons(self, layout):
+
         help_btn = QPushButton("ℹ  Ayuda")
         help_btn.clicked.connect(self.show_help)
         layout.addWidget(help_btn)
