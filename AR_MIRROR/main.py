@@ -82,10 +82,6 @@ def main():
     # Ejecutar aplicación
     exit_code = app.exec_()
     
-    # Limpiar
-    logger.info("\nLimpiando recursos...")
-    cap.release()
-    mp_pose.close()
     logger.info("Programa finalizado correctamente")
     
     sys.exit(exit_code)

@@ -69,7 +69,6 @@ class ARAppDesigner(QMainWindow):
     def init_ui(self):
         self.setWindowTitle("Espejo AR")
 
-        logger.warning(" Iniciando Interfaz Gráfica...")
         self.setGeometry(int(WINDOW_WIDTH*0.45), int(WINDOW_HEIGHT*0.9), WINDOW_WIDTH, WINDOW_HEIGHT)
         
         # Layout principal horizontal
@@ -374,6 +373,8 @@ class ARAppDesigner(QMainWindow):
                       (valores menores = playera más grande)
                             """)
     
-    
-    def closeEvent(self):
-        pass
+    def closeEvent(self, event):
+       self.on_closing()
+       if hasattr(self, 'debug_window') and self.debug_window is not None:
+           self.debug_window.close()
+       event.accept()

@@ -978,7 +978,7 @@ class ModelRenderer:
 
         if args.debug:
             logger.debug(f"   Textura activa: {self.texture_renderer.active_texture_name}")
-            logger.debug(f"   Info: {texture_info}")
+            #logger.debug(f"   Info: {texture_info}")
 
             if self.obj_model and self.obj_model.has_texture_coordinates():
                 logger.debug("    Modelo tiene coordenadas UV")

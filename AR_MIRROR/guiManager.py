@@ -45,6 +45,13 @@ class ARApp(ARAppDesigner):
         self.current_y_offset = -0.3
         self.current_x_offset = -0.1
         self.current_shoulder_ref = 0.25
+
+        self.reference_xAxis = 0.8
+        self.enable_reference_axis = False
+
+        if args.debug:
+            self.enable_reference_axis = True
+
         
         # Variables de video
         self.fps = 0
@@ -71,6 +78,36 @@ class ARApp(ARAppDesigner):
         # Iniciar bucle de video
         self.update_video()
     
+    def keyPressEvent(self, event):
+
+        key = event.key()
+        
+        if key == Qt.Key_R:
+            self.reset_controls()
+            print("Controles reseteados")
+        
+        
+        # Si se presiona la tecla 'Escape', cerrar la aplicación
+        elif key == Qt.Key_Escape:
+            self.on_closing()
+        
+        # Teclas para ajustar brillo
+        elif key == Qt.Key_Left:
+            self.current_brightness = max(0.0, self.current_brightness - 0.05)
+            self.update_brightness(self.current_brightness)
+            print(f"Brillo: {self.current_brightness:.2f}")
+        elif key == Qt.Key_Right:
+            self.current_brightness = min(1.0, self.current_brightness + 0.05)
+            self.update_brightness(self.current_brightness)
+            print(f"Brillo: {self.current_brightness:.2f}")
+        
+        # También podemos manejar combinaciones de teclas, por ejemplo Ctrl+R
+        #elif key == Qt.Key_R and (event.modifiers() & Qt.ControlModifier):
+        #    print("Ctrl+R presionado")
+        
+        # Llamar al método de la clase base para manejar otros eventos estándar
+        super().keyPressEvent(event)
+
     def set_render_mode(self, mode):
         if self.model_renderer:
             self.model_renderer.set_render_mode(mode)
@@ -171,8 +208,8 @@ class ARApp(ARAppDesigner):
 
         ret, frame = self.cap.read()
         if not ret:
-            self.info_label.setText(" No se pudo capturar video")
-            self.info_label.setStyleSheet("color: red; font-weight: bold;")
+            #self.info_label.setText(" No se pudo capturar video")
+            #self.info_label.setStyleSheet("color: red; font-weight: bold;")
             return
         
         CAMERA_ID = 2
@@ -189,6 +226,14 @@ class ARApp(ARAppDesigner):
         if time_diff > 0:
             self.fps = 1 / time_diff
         self.prev_time = current_time
+
+        # Dibujar línea de referencia si está habilitada
+        if self.enable_reference_axis:
+            line_x = int(self.reference_xAxis * h)
+            cv2.line(frame, (0, line_x), (w, line_x), (0, 255, 255), 2)  # Línea amarilla
+            cv2.putText(frame, f"Ref Line: {self.reference_xAxis:.2f}", 
+                       (w - 200, line_x - 10), cv2.FONT_HERSHEY_SIMPLEX, 
+                       0.5, (0, 255, 255), 1)
         
         # Procesar con MediaPipe
         rgb = cv2.cvtColor(frame_mp, cv2.COLOR_BGR2RGB)
@@ -335,11 +380,41 @@ class ARApp(ARAppDesigner):
         return rgba
     
     def on_closing(self):
-        logger.info("\n Cerrando aplicación...")
+        logger.info("Cerrando aplicación...")
         self.running = False
-        if self.model_renderer:
-            self.model_renderer.cleanup()
-        if self.mp_pose:
-            self.mp_pose.close()
-        self.cap.release()
-        self.root.destroy()
+
+        # Detener el timer de actualización de video
+        if hasattr(self, 'timer') and self.timer.isActive():
+            self.timer.stop()
+
+        # Cerrar ventana de debug si existe
+        if hasattr(self, 'debug_window') and self.debug_window is not None:
+            self.debug_window.close()
+            self.debug_window = None
+
+        # Limpiar recursos de MediaPipe si existe y no está ya cerrado
+        if hasattr(self, 'mp_pose') and self.mp_pose is not None:
+            try:
+                self.mp_pose.close()
+            except Exception as e:
+                logger.warning(f"Error al cerrar MediaPipe: {e}")
+            finally:
+                self.mp_pose = None
+
+        # Liberar la cámara si existe
+        if hasattr(self, 'cap') and self.cap is not None:
+            self.cap.release()
+            self.cap = None
+
+        # Limpiar el renderizador 3D si existe
+        if hasattr(self, 'model_renderer') and self.model_renderer is not None:
+            try:
+                self.model_renderer.cleanup()
+            except Exception as e:
+                logger.warning(f"Error al limpiar el renderizador: {e}")
+            finally:
+                self.model_renderer = None
+
+        logger.info("Aplicación cerrada correctamente")
+        # Cerrar la ventana principal
+        self.close()

@@ -1,15 +1,14 @@
-"""
-TextureRenderer - Sistema de gestión de texturas para modelos 3D
-"""
+import os
+import cv2
+import logging
 
 import numpy as np
 from OpenGL.GL import *
-import cv2
-import os
 from typing import Dict, Optional, Tuple
 
 from utils.app_args import args
 
+logger = logging.getLogger(__name__)
 class TextureRenderer:
     
     def __init__(self):
@@ -18,7 +17,7 @@ class TextureRenderer:
         self.active_texture_set: Optional[Dict[str, int]] = None
         
         if args.debug:
-            print(" TextureRenderer inicializado")
+            logger.debug(" TextureRenderer inicializado")
     
     def _create_opengl_texture(self, image: np.ndarray, is_normal_map: bool = False) -> int:
         """
@@ -74,14 +73,14 @@ class TextureRenderer:
     
     def _load_single_texture(self, filepath: str, texture_type: str = "diffuse") -> Optional[int]:
         if not os.path.exists(filepath):
-            print(f" No se encontró la textura: {filepath}")
+            logger.warning(f" No se encontró la textura: {filepath}")
             return None
         
         # Cargar imagen
         img = cv2.imread(filepath, cv2.IMREAD_UNCHANGED)
         
         if img is None:
-            print(f" Error cargando imagen: {filepath}")
+            logger.warning(f" Error cargando imagen: {filepath}")
             return None
         
         # Convertir basado en el tipo de textura
@@ -133,7 +132,7 @@ class TextureRenderer:
         self.textures[name][texture_type] = tex_id
         
         if args.debug:
-            print(f" Textura '{texture_type}' para '{name}' cargada desde {os.path.basename(filepath)}")
+            logger.debug(f" Textura '{texture_type}' para '{name}' cargada desde {os.path.basename(filepath)}")
         
         # Si es la primera textura de este material, hacerla activa
         if self.active_texture_name is None:
@@ -162,27 +161,27 @@ class TextureRenderer:
         if normal_path and os.path.exists(normal_path):
             self.load_texture(name, normal_path, "normal")
         else:
-            print(f"  No se encontró mapa de normales para '{name}'")
+            logger.warning(f"  No se encontró mapa de normales para '{name}'")
         
         return True
     
     def set_active_texture(self, name: str) -> bool:
         if name not in self.textures:
-            print(f" Textura '{name}' no existe")
-            print(f"   Texturas disponibles: {list(self.textures.keys())}")
+            logger.debug(f" Textura '{name}' no existe")
+            logger.debug(f"   Texturas disponibles: {list(self.textures.keys())}")
             return False
         
         self.active_texture_name = name
         self.active_texture_set = self.textures[name]
         
         if args.debug:
-            print(f" Textura activa: '{name}'")
+            logger.debug(f" Textura activa: '{name}'")
             if "diffuse" in self.active_texture_set:
-                print(f"    Textura difusa disponible")
+                logger.debug(f"    Textura difusa disponible")
             if "normal" in self.active_texture_set:
-                print(f"    Mapa de normales disponible")
+                logger.debug(f"    Mapa de normales disponible")
             else:
-                print(f"    Sin mapa de normales")
+                logger.debug(f"    Sin mapa de normales")
 
         return True
     
@@ -262,7 +261,7 @@ class TextureRenderer:
         # Eliminar texturas OpenGL
         for tex_type, tex_id in self.textures[name].items():
             glDeleteTextures(1, [tex_id])
-            print(f" Textura '{tex_type}' de '{name}' eliminada")
+            #print(f" Textura '{tex_type}' de '{name}' eliminada")
         
         # Eliminar del diccionario
         del self.textures[name]
