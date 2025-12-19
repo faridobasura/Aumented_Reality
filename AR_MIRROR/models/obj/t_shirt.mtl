@@ -1,0 +1,40 @@
+<<<<<<< HEAD
+# Blender 5.0.0 MTL File: 't_shirt_decimated.blend'
+=======
+# Blender 5.0.0 MTL File: 'crop.blend'
+>>>>>>> fixing/AddingTextures
+# www.blender.org
+
+newmtl Material3047.001
+Ns 28.763235
+Ka 1.000000 1.000000 1.000000
+Kd 0.559262 0.559262 0.559262
+Ks 0.075000 0.075000 0.075000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+
+newmtl Self_mesh_Copy_1_FRONT_2720.001
+Ns 28.763235
+Ka 1.000000 1.000000 1.000000
+Kd 1.000000 1.000000 1.000000
+Ks 0.075000 0.075000 0.075000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+
+newmtl Self_mesh_FRONT_2709.001
+Ns 28.763235
+Ka 1.000000 1.000000 1.000000
+Ks 0.075000 0.075000 0.075000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+<<<<<<< HEAD
+map_Kd Solid_white.png
+=======
+map_Kd white_solid.png
+>>>>>>> fixing/AddingTextures
