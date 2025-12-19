@@ -7,12 +7,11 @@ from PyQt5.QtWidgets import QApplication
 from guiManager import ARApp
 from utils.app_args import args
 from utils.objectLoader import ObjModel
+from properties.properties import properties
 from utils.logger import logger, set_log_level
 
 # Constantes
-CAMERA_ID = 0
-WINDOW_WIDTH = 768
-WINDOW_HEIGHT = 1024
+
 
 # Rutas de archivos
 TWOD_SHIRT_PATH = os.path.expanduser('~/AR_python/Aumented_Reality/AR_MIRROR/models/Black_T_Shirt_PNG_Clip_Art-3107.png')
@@ -27,14 +26,14 @@ logger.info("Starting AR MIRROR GUI")
 
 def main():
     # Inicializar cámara
-    cap = cv2.VideoCapture(CAMERA_ID)
+    cap = cv2.VideoCapture(properties.CAMERA_ID)
     
     if not cap.isOpened():
         print("❌ No se pudo abrir la cámara")
         return
 
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, WINDOW_WIDTH)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, WINDOW_HEIGHT)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, properties.WINDOW_WIDTH)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, properties.WINDOW_HEIGHT)
     
     FRAME_W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     FRAME_H = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))

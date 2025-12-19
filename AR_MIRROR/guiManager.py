@@ -10,6 +10,7 @@ from utils import twoD_Render
 from utils.app_args import args
 from utils.poseSmoother import PoseSmoother
 from guiManagerDesigner import ARAppDesigner
+from properties.properties import properties
 from utils.modelRenderer import ModelRenderer
 
 # Constantes
@@ -17,7 +18,13 @@ SHOULDER_LEFT = 11
 SHOULDER_RIGHT = 12
 HIP_LEFT = 23
 HIP_RIGHT = 24
-
+LEFT_ANKLE = 27
+RIGHT_ANKLE = 28
+RIGHT_ANKLE = 28    
+LEFT_HEEL = 29        
+RIGHT_HEEL = 30      
+LEFT_TOES = 31  
+RIGHT_TOES = 32 
 
 
 logger = logging.getLogger(__name__)
@@ -46,13 +53,13 @@ class ARApp(ARAppDesigner):
         self.current_x_offset = -0.1
         self.current_shoulder_ref = 0.25
 
-        self.reference_xAxis = 0.8
+        self.reference_y_bottom = 1
+        self.reference_y_top = 0.7
         self.enable_reference_axis = False
 
         if args.debug:
             self.enable_reference_axis = True
 
-        
         # Variables de video
         self.fps = 0
         self.frame_count = 0
@@ -212,9 +219,8 @@ class ARApp(ARAppDesigner):
             #self.info_label.setStyleSheet("color: red; font-weight: bold;")
             return
         
-        CAMERA_ID = 2
-        if CAMERA_ID == 0:
-            frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+        if properties.CAMERA_ID == 2:
+            frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
         
         frame_mp = frame.copy()
         self.frame_count += 1
@@ -229,12 +235,19 @@ class ARApp(ARAppDesigner):
 
         # Dibujar línea de referencia si está habilitada
         if self.enable_reference_axis:
-            line_x = int(self.reference_xAxis * h)
-            cv2.line(frame, (0, line_x), (w, line_x), (0, 255, 255), 2)  # Línea amarilla
-            cv2.putText(frame, f"Ref Line: {self.reference_xAxis:.2f}", 
-                       (w - 200, line_x - 10), cv2.FONT_HERSHEY_SIMPLEX, 
+
+            line_x_top = int(self.reference_y_top * h)
+            cv2.line(frame, (0, line_x_top), (w, line_x_top), (125, 200, 130), 2)  
+            cv2.putText(frame, f"Ref Line Top: {self.reference_y_top:.2f}", 
+                       (w - 200, line_x_top - 10), cv2.FONT_HERSHEY_SIMPLEX, 
                        0.5, (0, 255, 255), 1)
         
+            line_x_bottom = int(self.reference_y_bottom * h)
+            cv2.line(frame, (0, line_x_bottom), (w, line_x_bottom), (0, 255, 255), 2)  
+            cv2.putText(frame, f"Ref Line Bottom: {self.reference_y_bottom:.2f}", 
+                       (w - 200, line_x_bottom - 10), cv2.FONT_HERSHEY_SIMPLEX, 
+                       0.5, (0, 255, 255), 1)
+
         # Procesar con MediaPipe
         rgb = cv2.cvtColor(frame_mp, cv2.COLOR_BGR2RGB)
         results = self.mp_pose.process(rgb)
@@ -255,11 +268,77 @@ class ARApp(ARAppDesigner):
             right_shoulder_visible = landmarks[SHOULDER_RIGHT].visibility > 0.8
             left_hip_visible = landmarks[HIP_LEFT].visibility > 0.8
             right_hip_visible = landmarks[HIP_RIGHT].visibility > 0.8
+
+            left_ankle_visible = landmarks[LEFT_ANKLE].visibility > 0.8
+            right_ankle_visible = landmarks[RIGHT_ANKLE].visibility > 0.8
+
+            left_heel_visible = landmarks[LEFT_HEEL].visibility > 0.8
+            right_heel_visible = landmarks[RIGHT_HEEL].visibility > 0.8
+
+            left_toes_visible = landmarks[LEFT_TOES].visibility > 0.8
+            right_toes_visible = landmarks[RIGHT_TOES].visibility > 0.8
+
             
             visible_shoulders = left_shoulder_visible and right_shoulder_visible
             visible_hips = left_hip_visible and right_hip_visible
             
-            if visible_shoulders and visible_hips and self.model_renderer:
+            visible_ankles = left_ankle_visible and right_ankle_visible
+            visible_heels = left_heel_visible and right_heel_visible
+            visible_toes = left_toes_visible and right_toes_visible
+
+            visible_feets = visible_ankles and visible_heels and visible_toes
+
+            visible_body = visible_shoulders and visible_hips and visible_feets
+
+            left_ankle_y = int(landmarks[LEFT_ANKLE].y * h)
+            right_ankle_y = int(landmarks[RIGHT_ANKLE].y * h)
+
+            left_heel_y = int(landmarks[LEFT_HEEL].y * h)
+            right_heel_y = int(landmarks[RIGHT_HEEL].y * h)
+
+            left_toes_y = int(landmarks[LEFT_TOES].y * h)
+            right_toes_y = int(landmarks[RIGHT_TOES].y * h)
+
+            ankle_avg_y = (left_ankle_y + right_ankle_y) / 2
+            heels_avg_y = (left_heel_y + right_heel_y) / 2
+            toes_avg_y = (left_toes_y + right_toes_y) / 2
+
+            line_x_top_px = int(self.reference_y_top * h)
+            line_x_bottom_px = int(self.reference_y_bottom * h)
+            
+            logger.warning(f"\n line_x_top_px: {line_x_top_px} \n line_x_bottom_px: {line_x_bottom_px}")
+
+            logger.warning(f"\n ankle_avg_y: {ankle_avg_y} \n heels_avg_y: {heels_avg_y} \n toes_avg_y: {toes_avg_y}")
+
+            
+            # Verificar si el cuerpo está dentro del rango
+
+            #####       EJE - Y : AUMENTA HACIA ABAJO
+            ankles_in_range = True if ((ankle_avg_y > line_x_top_px ) and(ankle_avg_y < line_x_bottom_px)) else False
+            heels_in_range = True if ((heels_avg_y > line_x_top_px ) and(heels_avg_y < line_x_bottom_px)) else False
+            toes_in_range = True if ((toes_avg_y > line_x_top_px ) and(toes_avg_y < line_x_bottom_px)) else False
+
+            feets_in_range = ankles_in_range and heels_in_range and toes_in_range
+            
+            should_project = feets_in_range
+            
+            #logger.warning(f"\nankles_in_range: {ankles_in_range} \nheels_in_range: {heels_in_range} \n toes_in_range: {toes_in_range}\nfeets_in_range: {feets_in_range} \n should_project: {should_project}")
+            # Mostrar información de debug
+            status = "EN RANGO" if should_project else "FUERA DE RANGO"
+            color = (0, 255, 0) if should_project else (0, 0, 255)
+            cv2.putText(frame, f"Estado: {status}", (10, 170), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+            
+            # También puedes rellenar la zona entre líneas para mayor claridad visual
+            if self.enable_reference_axis:
+                overlay = frame.copy()
+                cv2.rectangle(overlay, (0, line_x_top_px), (w, line_x_bottom_px), 
+                             (0, 100, 0), -1)  # Relleno verde semitransparente
+                alpha = 0.1  # Transparencia
+                frame = cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0)
+            
+            #if visible_shoulders and visible_hips and self.model_renderer:
+            if visible_body and should_project and self.model_renderer:
                 self.frames_without_pose = 0
 
                 # Calcular coordenadas del torso
