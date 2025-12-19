@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                               QLabel, QPushButton, QSlider, QGroupBox, 
-                              QScrollArea, QMessageBox, QFrame, QGridLayout)
+                              QScrollArea, QMessageBox, QFrame, QGridLayout, QApplication)
 from PyQt5.QtCore import QTimer, Qt, QSize
 from PyQt5.QtGui import QImage, QPixmap, QFont, QIcon
 import cv2
@@ -49,16 +49,25 @@ class ARAppDesigner(QMainWindow):
     def __init__(self):
         super().__init__()
 
+        self.setWindowTitle("Espejo AR")
+
+        if not properties.settings.Fullscreen:
+            self.resize(WINDOW_WIDTH, WINDOW_HEIGHT)
+            self.move(100, 100)  # Posición fija inicial
+        
         # Crear interfaz
         self.init_ui()
 
-        # Timer para actualizar video
-        self.timer = QTimer()
-        self.timer.timeout.connect(self.update_video)
-        self.timer.start(30)  # 30ms ~ 33 FPS
+        # Esperar un momento antes de iniciar timer
+        QTimer.singleShot(100, self.start_video_timer)
 
         if args.debug:
-            self._create_debug_window()
+            QTimer.singleShot(200, self._create_debug_window)
+
+    def start_video_timer(self):
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.update_video)
+        self.timer.start(50) 
 
     def _create_debug_window(self):
         
@@ -328,8 +337,10 @@ class ARAppDesigner(QMainWindow):
             return
 
         if texture not in self.textures_loaded:
-            print(f"Textura no cargada: {texture}")
+            logger.warning(f"Textura no cargada: {texture}")
             return
+        
+        logger.info(f"Textura aplicada: {texture}")
 
         self.model_renderer.texture_renderer.set_active_texture(texture)
 
@@ -373,6 +384,34 @@ class ARAppDesigner(QMainWindow):
                       (valores menores = playera más grande)
                             """)
     
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+
+        # Forzar actualización del video label si existe
+        if hasattr(self, 'video_label') and self.video_label:
+            # Actualizar el pixmap con el nuevo tamaño
+            self.video_label.updateGeometry()
+
+            # Si hay un pixmap actual, escalarlo
+            current_pixmap = self.video_label.pixmap()
+            if current_pixmap and not current_pixmap.isNull():
+                # Escalar al nuevo tamaño del label
+                scaled = current_pixmap.scaled(
+                    self.video_label.size(),
+                    Qt.IgnoreAspectRatio,
+                    Qt.SmoothTransformation
+                )
+                self.video_label.setPixmap(scaled)
+
+        # Si está en modo debug, también redimensionar la ventana debug
+        if hasattr(self, 'debug_window') and self.debug_window:
+            if not self.isFullScreen():
+                # Posicionar ventana debug relativa a la principal
+                main_geometry = self.geometry()
+                debug_x = main_geometry.x() + main_geometry.width() + 10
+                debug_y = main_geometry.y()
+                self.debug_window.move(debug_x, debug_y)
+
     def closeEvent(self, event):
        self.on_closing()
        if hasattr(self, 'debug_window') and self.debug_window is not None:

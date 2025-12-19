@@ -2,6 +2,7 @@ import os
 import sys
 import cv2
 import mediapipe as mp
+from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication
 
 from guiManager import ARApp
@@ -29,7 +30,7 @@ def main():
     cap = cv2.VideoCapture(properties.CAMERA_ID)
     
     if not cap.isOpened():
-        print("❌ No se pudo abrir la cámara")
+        logger.warning(" No se pudo abrir la cámara")
         return
 
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, properties.WINDOW_WIDTH)
@@ -75,9 +76,22 @@ def main():
         textures_dir=args.textures_dir,
         twoD_shirth_path=TWOD_SHIRT_PATH
     )
-    
-    window.show()
-    
+    if properties.settings.Fullscreen:
+        # Mostrar inmediatamente en fullscreen
+        window.showFullScreen()
+        # Forzar un redibujado completo
+        window.update()
+        window.repaint()
+        # También forzar un redimensionamiento del video label
+        QApplication.processEvents()
+    else:
+        # Para modo normal, también aseguramos tamaño
+        window.showNormal()
+        window.resize(properties.WINDOW_WIDTH, properties.WINDOW_HEIGHT)
+        window.update()
+        window.repaint()
+        QApplication.processEvents()
+
     # Ejecutar aplicación
     exit_code = app.exec_()
     

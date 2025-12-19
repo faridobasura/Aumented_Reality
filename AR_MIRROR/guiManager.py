@@ -91,9 +91,14 @@ class ARApp(ARAppDesigner):
         
         if key == Qt.Key_R:
             self.reset_controls()
-            print("Controles reseteados")
+            logger.info("Controles reseteados")
         
-        
+        elif key == Qt.Key_F:
+            properties.settings.Fullscreen = not properties.settings.Fullscreen
+            if properties.settings.Fullscreen:
+                logger.info("Cambiado a ventana completa")
+            else:
+                logger.info("Cambiado a ventana parcial")
         # Si se presiona la tecla 'Escape', cerrar la aplicación
         elif key == Qt.Key_Escape:
             self.on_closing()
@@ -102,11 +107,11 @@ class ARApp(ARAppDesigner):
         elif key == Qt.Key_Left:
             self.current_brightness = max(0.0, self.current_brightness - 0.05)
             self.update_brightness(self.current_brightness)
-            print(f"Brillo: {self.current_brightness:.2f}")
+            logger.info(f"Brillo: {self.current_brightness:.2f}")
         elif key == Qt.Key_Right:
             self.current_brightness = min(1.0, self.current_brightness + 0.05)
             self.update_brightness(self.current_brightness)
-            print(f"Brillo: {self.current_brightness:.2f}")
+            logger.info(f"Brillo: {self.current_brightness:.2f}")
         
         # También podemos manejar combinaciones de teclas, por ejemplo Ctrl+R
         #elif key == Qt.Key_R and (event.modifiers() & Qt.ControlModifier):
@@ -306,12 +311,11 @@ class ARApp(ARAppDesigner):
             line_x_top_px = int(self.reference_y_top * h)
             line_x_bottom_px = int(self.reference_y_bottom * h)
             
-            logger.warning(f"\n line_x_top_px: {line_x_top_px} \n line_x_bottom_px: {line_x_bottom_px}")
+            #logger.warning(f"\n line_x_top_px: {line_x_top_px} \n line_x_bottom_px: {line_x_bottom_px}")
 
-            logger.warning(f"\n ankle_avg_y: {ankle_avg_y} \n heels_avg_y: {heels_avg_y} \n toes_avg_y: {toes_avg_y}")
+            #logger.warning(f"\n ankle_avg_y: {ankle_avg_y} \n heels_avg_y: {heels_avg_y} \n toes_avg_y: {toes_avg_y}")
 
-            
-            # Verificar si el cuerpo está dentro del rango
+            # Verificar si los pies están dentro del rango
 
             #####       EJE - Y : AUMENTA HACIA ABAJO
             ankles_in_range = True if ((ankle_avg_y > line_x_top_px ) and(ankle_avg_y < line_x_bottom_px)) else False
