@@ -150,8 +150,6 @@ class ARAppDesigner(QMainWindow):
         grid = QGridLayout(catalog_container)
         grid.setSpacing(10)
 
-        BUTTON_SIZE = QSize(int(WINDOW_WIDTH*0.1), int(WINDOW_HEIGHT*0.2))
-
         self.catalog = [
             {
                 "name": "Playera Blanca",
@@ -174,7 +172,6 @@ class ARAppDesigner(QMainWindow):
 
             btn = QPushButton()
             btn.setToolTip(item["name"])
-            btn.setMinimumSize(int(WINDOW_WIDTH*0.1), int(WINDOW_HEIGHT*0.2))
 
             image_path = str(item["image"])
             pixmap = QPixmap(image_path)
