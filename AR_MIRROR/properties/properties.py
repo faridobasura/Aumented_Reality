@@ -13,6 +13,8 @@ class Properties():
         self.settings = Settings()
         #self.settings_file = os.path.join(APP_DATA_DIR,'settings.json')
         self.CAMERA_ID = 0
-        self.WINDOW_WIDTH = 768
+        self.WINDOW_WIDTH = 1024
         self.WINDOW_HEIGHT = 1024
+
+        self.should_project = False
 properties = Properties()

@@ -4,6 +4,7 @@ import logging
 import numpy as np
 
 from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QApplication
 from PyQt5.QtGui import QImage, QPixmap
 
 from utils import twoD_Render
@@ -87,31 +88,43 @@ class ARApp(ARAppDesigner):
     
     def keyPressEvent(self, event):
 
+        if event.isAutoRepeat():
+            event.ignore()
+            return
+
         key = event.key()
-        
+    
         if key == Qt.Key_R:
             self.reset_controls()
             logger.info("Controles reseteados")
+            event.accept()
         
         elif key == Qt.Key_F:
             properties.settings.Fullscreen = not properties.settings.Fullscreen
             if properties.settings.Fullscreen:
-                logger.info("Cambiado a ventana completa")
+                self.showFullScreen()
+                QApplication.processEvents()
             else:
-                logger.info("Cambiado a ventana parcial")
+                self.showNormal()
+                #self.resize(properties.WINDOW_WIDTH, properties.WINDOW_HEIGHT)
+                QApplication.processEvents()
+
+            event.accept()
         # Si se presiona la tecla 'Escape', cerrar la aplicación
         elif key == Qt.Key_Escape:
             self.on_closing()
-        
+            event.accept()
         # Teclas para ajustar brillo
         elif key == Qt.Key_Left:
             self.current_brightness = max(0.0, self.current_brightness - 0.05)
             self.update_brightness(self.current_brightness)
             logger.info(f"Brillo: {self.current_brightness:.2f}")
+            event.accept()
         elif key == Qt.Key_Right:
             self.current_brightness = min(1.0, self.current_brightness + 0.05)
             self.update_brightness(self.current_brightness)
             logger.info(f"Brillo: {self.current_brightness:.2f}")
+            event.accept()
         
         # También podemos manejar combinaciones de teclas, por ejemplo Ctrl+R
         #elif key == Qt.Key_R and (event.modifiers() & Qt.ControlModifier):
@@ -218,6 +231,8 @@ class ARApp(ARAppDesigner):
         return textures_loaded
     def update_video(self):
 
+        
+
         ret, frame = self.cap.read()
         if not ret:
             #self.info_label.setText(" No se pudo capturar video")
@@ -252,7 +267,7 @@ class ARApp(ARAppDesigner):
             cv2.putText(frame, f"Ref Line Bottom: {self.reference_y_bottom:.2f}", 
                        (w - 200, line_x_bottom - 10), cv2.FONT_HERSHEY_SIMPLEX, 
                        0.5, (0, 255, 255), 1)
-
+            
         # Procesar con MediaPipe
         rgb = cv2.cvtColor(frame_mp, cv2.COLOR_BGR2RGB)
         results = self.mp_pose.process(rgb)
@@ -324,8 +339,9 @@ class ARApp(ARAppDesigner):
 
             feets_in_range = ankles_in_range and heels_in_range and toes_in_range
             
-            should_project = feets_in_range
-            
+            properties.should_project = feets_in_range
+
+            should_project = properties.should_project
             #logger.warning(f"\nankles_in_range: {ankles_in_range} \nheels_in_range: {heels_in_range} \n toes_in_range: {toes_in_range}\nfeets_in_range: {feets_in_range} \n should_project: {should_project}")
             # Mostrar información de debug
             status = "EN RANGO" if should_project else "FUERA DE RANGO"
@@ -333,100 +349,106 @@ class ARApp(ARAppDesigner):
             cv2.putText(frame, f"Estado: {status}", (10, 170), 
                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
             
-            # También puedes rellenar la zona entre líneas para mayor claridad visual
+            # rellenar la zona entre líneas 
             if self.enable_reference_axis:
                 overlay = frame.copy()
                 cv2.rectangle(overlay, (0, line_x_top_px), (w, line_x_bottom_px), 
                              (0, 100, 0), -1)  # Relleno verde semitransparente
                 alpha = 0.1  # Transparencia
                 frame = cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0)
-            
-            #if visible_shoulders and visible_hips and self.model_renderer:
-            if visible_body and should_project and self.model_renderer:
-                self.frames_without_pose = 0
 
-                # Calcular coordenadas del torso
-                left_shoulder_x = int(landmarks[SHOULDER_LEFT].x * w)
-                left_shoulder_y = int(landmarks[SHOULDER_LEFT].y * h)
-                right_shoulder_x = int(landmarks[SHOULDER_RIGHT].x * w)
-                right_shoulder_y = int(landmarks[SHOULDER_RIGHT].y * h)
-                left_hip_x = int(landmarks[HIP_LEFT].x * w)
-                left_hip_y = int(landmarks[HIP_LEFT].y * h)
-                
-                # Calcular dimensiones
-                import math
-                torso_width = int(math.sqrt(
-                    (right_shoulder_x - left_shoulder_x) ** 2 +
-                    (right_shoulder_y - left_shoulder_y) ** 2
-                ) * 1.7)
-                
-                torso_height = int(math.sqrt(
-                    (left_hip_x - left_shoulder_x) ** 2 +
-                    (left_hip_y - left_shoulder_y) ** 2
-                ) * 1.5)
-                
-                torso_width = max(torso_width, 100)
-                torso_height = max(torso_height, 150)
-                
-                # Calcular centro
-                torso_center_x = int((left_shoulder_x + right_shoulder_x + left_hip_x) / 3)
-                torso_center_y = int((left_shoulder_y + right_shoulder_y + left_hip_y) / 3)
-                
-                x = torso_center_x - torso_width // 2
-                y = torso_center_y - torso_height // 2
-                
-                # MODO 3D
-                if getattr(results, "pose_world_landmarks", None):
-                    pl = results.pose_world_landmarks.landmark
-                    
-                    landmarks_3d = {
-                        "left_shoulder": [pl[SHOULDER_LEFT].x, pl[SHOULDER_LEFT].y, pl[SHOULDER_LEFT].z],
-                        "right_shoulder": [pl[SHOULDER_RIGHT].x, pl[SHOULDER_RIGHT].y, pl[SHOULDER_RIGHT].z],
-                        "left_hip": [pl[HIP_LEFT].x, pl[HIP_LEFT].y, pl[HIP_LEFT].z],
-                        "right_hip": [pl[HIP_RIGHT].x, pl[HIP_RIGHT].y, pl[HIP_RIGHT].z]
-                    }
-                    
-                    # Calcular escala
-                    right_shoulder_3d = np.array([pl[SHOULDER_RIGHT].x, pl[SHOULDER_RIGHT].y, pl[SHOULDER_RIGHT].z])
-                    left_shoulder_3d = np.array([pl[SHOULDER_LEFT].x, pl[SHOULDER_LEFT].y, pl[SHOULDER_LEFT].z])
-                    shoulder_distance_3d = np.linalg.norm(right_shoulder_3d - left_shoulder_3d)
-                    scale_multiplier = shoulder_distance_3d / self.current_shoulder_ref
-                    
-                    # Alinear modelo
-                    rotation, scale, translation = self.model_renderer.align_model_with_landmarks(
-                        landmarks_3d, 
-                        scale_multiplier=scale_multiplier
-                    )
-                    
-                    # SUAVIZAR TRANSFORMACIÓN
-                    if rotation is not None and translation is not None:
-                        translation_arr = np.array(translation, dtype=np.float32)
-                        rotation_arr = np.array(rotation, dtype=np.float32)
-                        
-                        # Suavizar
-                        translation_arr, rotation_arr, scale = self.pose_smoother.smooth_transform(
-                            translation_arr, rotation_arr, scale
-                        )
-                        
-                        # Aplicar offsets
-                        translation_arr[0] += self.current_x_offset
-                        translation_arr[1] += self.current_y_offset
-                        
-                        self.model_renderer.set_model_transform(translation_arr, rotation_arr, scale)
-                        
-                        img_3d = self._render_shirt(torso_width, torso_height)
-                        
-                        try:
-                            if img_3d is not None:
-                                frame = twoD_Render.overlay_transparent(frame, img_3d, x, y)
-                        except Exception as e:
-                            logger.warning(f" Error al superponer playera: {e}")
-            else:
-                # Usar última pose válida si no se detecta
-                self.frames_without_pose += 1
-                if self.frames_without_pose > self.max_frames_without_pose:
-                    self.pose_smoother.reset()
+            if not properties.should_project:
+                self._show_gif_overlay()                
+    
+            else:      
+                #if visible_shoulders and visible_hips and self.model_renderer:
+                if visible_body and should_project and self.model_renderer:
+                    self._hide_gif_overlay()
+
                     self.frames_without_pose = 0
+
+                    # Calcular coordenadas del torso
+                    left_shoulder_x = int(landmarks[SHOULDER_LEFT].x * w)
+                    left_shoulder_y = int(landmarks[SHOULDER_LEFT].y * h)
+                    right_shoulder_x = int(landmarks[SHOULDER_RIGHT].x * w)
+                    right_shoulder_y = int(landmarks[SHOULDER_RIGHT].y * h)
+                    left_hip_x = int(landmarks[HIP_LEFT].x * w)
+                    left_hip_y = int(landmarks[HIP_LEFT].y * h)
+
+                    # Calcular dimensiones
+                    import math
+                    torso_width = int(math.sqrt(
+                        (right_shoulder_x - left_shoulder_x) ** 2 +
+                        (right_shoulder_y - left_shoulder_y) ** 2
+                    ) * 1.7)
+
+                    torso_height = int(math.sqrt(
+                        (left_hip_x - left_shoulder_x) ** 2 +
+                        (left_hip_y - left_shoulder_y) ** 2
+                    ) * 1.5)
+
+                    torso_width = max(torso_width, 100)
+                    torso_height = max(torso_height, 150)
+
+                    # Calcular centro
+                    torso_center_x = int((left_shoulder_x + right_shoulder_x + left_hip_x) / 3)
+                    torso_center_y = int((left_shoulder_y + right_shoulder_y + left_hip_y) / 3)
+
+                    x = torso_center_x - torso_width // 2
+                    y = torso_center_y - torso_height // 2
+
+                    # MODO 3D
+                    if getattr(results, "pose_world_landmarks", None):
+                        pl = results.pose_world_landmarks.landmark
+
+                        landmarks_3d = {
+                            "left_shoulder": [pl[SHOULDER_LEFT].x, pl[SHOULDER_LEFT].y, pl[SHOULDER_LEFT].z],
+                            "right_shoulder": [pl[SHOULDER_RIGHT].x, pl[SHOULDER_RIGHT].y, pl[SHOULDER_RIGHT].z],
+                            "left_hip": [pl[HIP_LEFT].x, pl[HIP_LEFT].y, pl[HIP_LEFT].z],
+                            "right_hip": [pl[HIP_RIGHT].x, pl[HIP_RIGHT].y, pl[HIP_RIGHT].z]
+                        }
+
+                        # Calcular escala
+                        right_shoulder_3d = np.array([pl[SHOULDER_RIGHT].x, pl[SHOULDER_RIGHT].y, pl[SHOULDER_RIGHT].z])
+                        left_shoulder_3d = np.array([pl[SHOULDER_LEFT].x, pl[SHOULDER_LEFT].y, pl[SHOULDER_LEFT].z])
+                        shoulder_distance_3d = np.linalg.norm(right_shoulder_3d - left_shoulder_3d)
+                        scale_multiplier = shoulder_distance_3d / self.current_shoulder_ref
+
+                        # Alinear modelo
+                        rotation, scale, translation = self.model_renderer.align_model_with_landmarks(
+                            landmarks_3d, 
+                            scale_multiplier=scale_multiplier
+                        )
+
+                        # SUAVIZAR TRANSFORMACIÓN
+                        if rotation is not None and translation is not None:
+                            translation_arr = np.array(translation, dtype=np.float32)
+                            rotation_arr = np.array(rotation, dtype=np.float32)
+
+                            # Suavizar
+                            translation_arr, rotation_arr, scale = self.pose_smoother.smooth_transform(
+                                translation_arr, rotation_arr, scale
+                            )
+
+                            # Aplicar offsets
+                            translation_arr[0] += self.current_x_offset
+                            translation_arr[1] += self.current_y_offset
+
+                            self.model_renderer.set_model_transform(translation_arr, rotation_arr, scale)
+
+                            img_3d = self._render_shirt(torso_width, torso_height)
+
+                            try:
+                                if img_3d is not None:
+                                    frame = twoD_Render.overlay_transparent(frame, img_3d, x, y)
+                            except Exception as e:
+                                logger.warning(f" Error al superponer playera: {e}")
+                else:
+                    # Usar última pose válida si no se detecta
+                    self.frames_without_pose += 1
+                    if self.frames_without_pose > self.max_frames_without_pose:
+                        self.pose_smoother.reset()
+                        self.frames_without_pose = 0
         
         # Agregar FPS
         cv2.putText(frame, f"FPS: {self.fps:.1f}", (10, 30), 
@@ -447,7 +469,7 @@ class ARApp(ARAppDesigner):
         scaled_pixmap = pixmap.scaled(label_width, label_height, Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
 
         self.video_label.setPixmap(scaled_pixmap)
-    
+
     def _render_shirt(self, torso_width, torso_height):
         if self.model_renderer is None:
             return None

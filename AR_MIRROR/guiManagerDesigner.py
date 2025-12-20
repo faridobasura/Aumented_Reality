@@ -1,22 +1,19 @@
+from PyQt5.QtGui import QMovie, QPixmap, QFont, QIcon
+from PyQt5.QtCore import QTimer, Qt, QSize, pyqtSignal
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                               QLabel, QPushButton, QSlider, QGroupBox, 
-                              QScrollArea, QMessageBox, QFrame, QGridLayout, QApplication)
-from PyQt5.QtCore import QTimer, Qt, QSize, pyqtSignal
-from PyQt5.QtGui import QImage, QPixmap, QFont, QIcon
+                              QScrollArea, QMessageBox, QFrame, QGridLayout)
 import cv2
-import numpy as np
+import os
 
+import logging
 from utils.app_args import args
 from properties.properties import properties
-import logging
-# Constantes
+from properties.config import OUT_OF_RANGE_GIF
 SHOULDER_LEFT = 11
 SHOULDER_RIGHT = 12
 HIP_LEFT = 23
 HIP_RIGHT = 24
-
-WINDOW_WIDTH = 1280
-WINDOW_HEIGHT = 1024
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +25,7 @@ class DebugWindow(QMainWindow):
         self.controller = controller 
 
         self.setWindowTitle("Controles Debug")
-        self.setGeometry(int(WINDOW_WIDTH*0.35), int(WINDOW_HEIGHT*0.15), WINDOW_WIDTH, int(WINDOW_HEIGHT*0.35))
+        self.setGeometry(int(properties.WINDOW_WIDTH*0.35), int(properties.WINDOW_HEIGHT*0.15), properties.WINDOW_WIDTH, int(properties.WINDOW_HEIGHT*0.35))
 
         self.controller.closeWindowSignal.connect(self.close)
         central = QWidget()
@@ -54,8 +51,17 @@ class ARAppDesigner(QMainWindow):
 
         self.setWindowTitle("Espejo AR")
 
+        self.gif_overlay = None
+        self.gif_frames = []
+        self.current_gif_frame_index = 0
+        self.gif_timer = QTimer()
+        self.gif_timer.timeout.connect(self._update_gif_frame)
+        self.gif_path = None  # Ruta al GIF que usarás
+
+        self.load_out_of_range_gif(OUT_OF_RANGE_GIF)  
+
         if not properties.settings.Fullscreen:
-            self.resize(WINDOW_WIDTH, WINDOW_HEIGHT)
+            self.resize(properties.WINDOW_WIDTH, properties.WINDOW_HEIGHT)
             self.move(100, 100)  # Posición fija inicial
         
         # Crear interfaz
@@ -81,11 +87,24 @@ class ARAppDesigner(QMainWindow):
     def init_ui(self):
         self.setWindowTitle("Espejo AR")
 
-        self.setGeometry(int(WINDOW_WIDTH*0.45), int(WINDOW_HEIGHT*0.9), WINDOW_WIDTH, WINDOW_HEIGHT)
+        self.setGeometry(int(properties.WINDOW_WIDTH*0.45), int(properties.WINDOW_HEIGHT*0.9), properties.WINDOW_WIDTH, properties.WINDOW_HEIGHT)
         
         # Layout principal horizontal
         main_widget = QWidget()
         main_layout = QHBoxLayout()
+
+        self.gif_overlay_label = QLabel(self)
+        self.gif_overlay_label.setStyleSheet("""
+            QLabel {
+                background-color: transparent;
+                border: none;
+            }
+        """)
+        self.gif_overlay_label.setScaledContents(True)
+        #self.gif_overlay_label.setAttribute(Qt.WA_TransparentForMouseEvents)  # Permitir clicks a través del label
+        self.gif_overlay_label.setGeometry(0, 0, self.width(), self.height())
+        self.gif_overlay_label.lower()  # Enviar atrás inicialmente
+        self.gif_overlay_label.hide()
         
         # === PANEL central: VIDEO ===
         central_panel_widget = QWidget()
@@ -95,7 +114,7 @@ class ARAppDesigner(QMainWindow):
         video_inner_layout = QVBoxLayout(self.video_container)
 
         self.video_label = QLabel()
-        self.video_label.setMinimumSize(int(WINDOW_WIDTH*0.625), int(WINDOW_HEIGHT*0.9))
+        self.video_label.setMinimumSize(int(properties.WINDOW_WIDTH*0.625), int(properties.WINDOW_HEIGHT*0.9))
         self.video_label.setStyleSheet("background-color: black;")
         self.video_label.setScaledContents(True)
         video_inner_layout.addWidget(self.video_label)
@@ -109,8 +128,8 @@ class ARAppDesigner(QMainWindow):
         # Scroll area para controles
         left_scroll = QScrollArea()
         left_scroll.setWidgetResizable(True)
-        left_scroll.setMaximumWidth(int(WINDOW_WIDTH*0.25))
-        left_scroll.setMinimumHeight(int(WINDOW_HEIGHT*0.9))
+        left_scroll.setMaximumWidth(int(properties.WINDOW_WIDTH*0.25))
+        left_scroll.setMinimumHeight(int(properties.WINDOW_HEIGHT*0.9))
         
         scroll_widget_left_area = QWidget()
         scroll_layout_left_area = QVBoxLayout(scroll_widget_left_area)
@@ -129,8 +148,8 @@ class ARAppDesigner(QMainWindow):
         # Scroll area para controles
         right_scroll = QScrollArea()
         right_scroll.setWidgetResizable(True)
-        right_scroll.setMaximumWidth(int(WINDOW_WIDTH*0.25))
-        right_scroll.setMinimumHeight(int(WINDOW_HEIGHT*0.9))
+        right_scroll.setMaximumWidth(int(properties.WINDOW_WIDTH*0.25))
+        right_scroll.setMinimumHeight(int(properties.WINDOW_HEIGHT*0.9))
         
         scroll_widget_right_area = QWidget()
         scroll_layout_right_area = QVBoxLayout(scroll_widget_right_area)
@@ -191,7 +210,7 @@ class ARAppDesigner(QMainWindow):
                 logger.warning(f" No se pudo cargar: {item['image']}")
 
             btn.setIcon(QIcon(pixmap))
-            btn.setIconSize(QSize(int(WINDOW_WIDTH*0.1), int(WINDOW_HEIGHT*0.2)))
+            btn.setIconSize(QSize(int(properties.WINDOW_WIDTH*0.1), int(properties.WINDOW_HEIGHT*0.2)))
 
             btn.clicked.connect(lambda checked=False, tex=item["texture"]: self.apply_texture(tex))
             
@@ -415,5 +434,95 @@ class ARAppDesigner(QMainWindow):
                 debug_y = main_geometry.y()
                 self.debug_window.move(debug_x, debug_y)
 
+        if hasattr(self, 'gif_overlay_label'):
+            window_width = self.width()
+            window_height = self.height()
+            self.gif_overlay_label.setGeometry(0, 0, window_width, window_height)
+
+            # Si está visible, actualizar el pixmap
+            if self.gif_overlay_label.isVisible():
+                self._show_gif_overlay()
+
+    def load_out_of_range_gif(self, gif_path):
+        try:
+            # Expandir ~ a la ruta home del usuario
+            gif_path = os.path.expanduser(gif_path)
+
+            if not os.path.exists(gif_path):
+                logger.warning(f"Archivo GIF no encontrado: {gif_path}")
+                return
+
+            cap = cv2.VideoCapture(gif_path)
+
+            self.gif_frames = []
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                # Se redimensionará dinámicamente según el tamaño de la ventana
+                self.gif_frames.append(frame)
+
+            cap.release()
+
+            if self.gif_frames:
+                logger.info(f"GIF cargado: {len(self.gif_frames)} frames")
+                self.current_gif_frame_index = 0
+                # Iniciar timer para animar (50ms = 20 fps)
+                self.gif_timer.start(50)
+            else:
+                logger.warning(f"El GIF no contiene frames: {gif_path}")
+        except Exception as e:
+            logger.warning(f"Error cargando GIF: {e}")
+
+
+    def _update_gif_frame(self):
+        if self.gif_frames:
+            self.current_gif_frame_index = (self.current_gif_frame_index + 1) % len(self.gif_frames)
+
+            # Si no está en rango, mostrar el GIF actualizado
+            if not properties.should_project:
+                self._show_gif_overlay()
+
+
+    def _show_gif_overlay(self):
+        if not self.gif_frames or self.current_gif_frame_index >= len(self.gif_frames):
+            return
+
+        try:
+            # Obtener el tamaño actual de la ventana
+            window_width = self.width()
+            window_height = self.height()
+
+            # Redimensionar el frame del GIF al tamaño de la ventana
+            gif_frame = self.gif_frames[self.current_gif_frame_index].copy()
+            gif_resized = cv2.resize(gif_frame, (window_width, window_height), interpolation=cv2.INTER_LINEAR)
+
+            # Convertir BGR a RGB para Qt
+            gif_rgb = cv2.cvtColor(gif_resized, cv2.COLOR_BGR2RGB)
+            h, w, ch = gif_rgb.shape
+            bytes_per_line = ch * w
+
+            # Convertir a QImage
+            from PyQt5.QtGui import QImage
+            qt_image = QImage(gif_rgb.data, w, h, bytes_per_line, QImage.Format_RGB888)
+
+            # Convertir a QPixmap
+            pixmap = QPixmap.fromImage(qt_image)
+
+            # Mostrar en el label overlay
+            self.gif_overlay_label.setPixmap(pixmap)
+            self.gif_overlay_label.setGeometry(0, 0, window_width, window_height)
+            self.gif_overlay_label.raise_()  # Traer al frente
+            self.gif_overlay_label.show()
+
+        except Exception as e:
+            logger.warning(f"Error mostrando GIF overlay: {e}")
+
+
+    def _hide_gif_overlay(self):
+        """Oculta el overlay del GIF"""
+        if hasattr(self, 'gif_overlay_label'):
+            self.gif_overlay_label.hide()
+        
     def on_closing(self):
         pass
