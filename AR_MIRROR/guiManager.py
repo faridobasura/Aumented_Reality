@@ -463,6 +463,8 @@ class ARApp(ARAppDesigner):
         return rgba
     
     def on_closing(self):
+
+        self.closeWindowSignal.emit()
         logger.info("Cerrando aplicación...")
         self.running = False
 

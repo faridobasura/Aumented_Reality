@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                               QLabel, QPushButton, QSlider, QGroupBox, 
                               QScrollArea, QMessageBox, QFrame, QGridLayout, QApplication)
-from PyQt5.QtCore import QTimer, Qt, QSize
+from PyQt5.QtCore import QTimer, Qt, QSize, pyqtSignal
 from PyQt5.QtGui import QImage, QPixmap, QFont, QIcon
 import cv2
 import numpy as np
@@ -15,7 +15,7 @@ SHOULDER_RIGHT = 12
 HIP_LEFT = 23
 HIP_RIGHT = 24
 
-WINDOW_WIDTH = 1024
+WINDOW_WIDTH = 1280
 WINDOW_HEIGHT = 1024
 
 logger = logging.getLogger(__name__)
@@ -25,11 +25,12 @@ class DebugWindow(QMainWindow):
     def __init__(self, controller):
         super().__init__()
 
-        self.controller = controller  # 👈 referencia a la clase hija
+        self.controller = controller 
 
         self.setWindowTitle("Controles Debug")
         self.setGeometry(int(WINDOW_WIDTH*0.35), int(WINDOW_HEIGHT*0.15), WINDOW_WIDTH, int(WINDOW_HEIGHT*0.35))
 
+        self.controller.closeWindowSignal.connect(self.close)
         central = QWidget()
         layout = QVBoxLayout(central)
 
@@ -45,6 +46,8 @@ class DebugWindow(QMainWindow):
         btn.clicked.connect(self.controller.reset_tracking)
         layout.addWidget(btn)
 class ARAppDesigner(QMainWindow):
+
+    closeWindowSignal = pyqtSignal()
     
     def __init__(self):
         super().__init__()
@@ -329,7 +332,7 @@ class ARAppDesigner(QMainWindow):
         layout.addWidget(reset_btn)
         
         exit_btn = QPushButton(" Salir")
-        exit_btn.clicked.connect(self.close)
+        exit_btn.clicked.connect(self.on_closing)
         layout.addWidget(exit_btn)
     
     def apply_texture(self, texture):
@@ -412,8 +415,5 @@ class ARAppDesigner(QMainWindow):
                 debug_y = main_geometry.y()
                 self.debug_window.move(debug_x, debug_y)
 
-    def closeEvent(self, event):
-       self.on_closing()
-       if hasattr(self, 'debug_window') and self.debug_window is not None:
-           self.debug_window.close()
-       event.accept()
+    def on_closing(self):
+        pass

@@ -4,6 +4,6 @@ from typing import Optional
 from datetime import datetime
 
 class Settings(BaseModel):
-    Fullscreen:bool = True
+    Fullscreen:bool = False
 
     
