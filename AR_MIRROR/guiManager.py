@@ -13,6 +13,7 @@ from utils.poseSmoother import PoseSmoother
 from guiManagerDesigner import ARAppDesigner
 from properties.properties import properties
 from utils.modelRenderer import ModelRenderer
+#from utils.twoD_Render import draw_silhouette
 
 # Constantes
 SHOULDER_LEFT = 11
@@ -31,7 +32,7 @@ RIGHT_TOES = 32
 logger = logging.getLogger(__name__)
 class ARApp(ARAppDesigner):
     
-    def __init__(self, cap, mp_pose, mp_drawing, pose_connections, obj_loaded, textures_dir, twoD_shirth_path):
+    def __init__(self, cap, mp_pose, mp_drawing, pose_connections, obj_loaded):
 
         super().__init__()
 
@@ -39,17 +40,19 @@ class ARApp(ARAppDesigner):
         self.cap = cap
         self.mp_pose = mp_pose
         self.obj_loaded = obj_loaded
-        self.textures_dir = textures_dir
-        self.shirt_path = twoD_shirth_path
+        self.silhouette = properties.resources.silhouette
+        self.textures_dir = properties.resources.textures_dir
+        self.twoD_shirt_path = properties.resources.twoD_shirt_path
         
         # Variables de aplicación
         self.model_renderer = None
+        self.twoD_renderer = None
         self.textures_loaded = []
         self.shirt_png = None
         self.running = True
         
         # Variables de control
-        self.current_brightness = 0.1
+        self.current_brightness = 0.0
         self.current_y_offset = -0.3
         self.current_x_offset = -0.1
         self.current_shoulder_ref = 0.25
@@ -81,7 +84,8 @@ class ARApp(ARAppDesigner):
         self.load_model()
         
         # Cargar imagen 2D
-        self.shirt_png = cv2.imread(twoD_shirth_path, cv2.IMREAD_UNCHANGED)
+        self.shirt_png = cv2.imread(self.twoD_shirt_path, cv2.IMREAD_UNCHANGED)
+        self.silhouette_png = cv2.imread(self.silhouette, cv2.IMREAD_UNCHANGED)
         
         # Iniciar bucle de video
         self.update_video()
@@ -141,7 +145,7 @@ class ARApp(ARAppDesigner):
     
     def update_brightness(self, value):
         self.current_brightness = float(value)
-        self.brightness_label.setText(f"{self.current_brightness:.2f}")
+        #self.brightness_label.setText(f"{self.current_brightness:.2f}")
         if self.model_renderer:
             self.model_renderer.brightness = self.current_brightness
     
@@ -164,8 +168,8 @@ class ARApp(ARAppDesigner):
         self.update_x_offset(-0.1)
         self.update_shoulder_ref(0.25)
 
-        #self.info_label.setText(" Configuración reseteada")
-        #self.info_label.setStyleSheet("color: green; font-weight: bold;")
+        self.info_label.setText(" Configuración reseteada")
+        self.info_label.setStyleSheet("color: green; font-weight: bold;")
 
     def load_model(self):
         from utils.objectLoader import ObjModel
@@ -199,8 +203,6 @@ class ARApp(ARAppDesigner):
 
                 # Activar textura en el renderer
                 self.model_renderer.texture_renderer.set_active_texture(selected)
-
-
     
     def _load_textures(self):
         textures_loaded = []
@@ -231,12 +233,10 @@ class ARApp(ARAppDesigner):
         return textures_loaded
     def update_video(self):
 
-        
-
         ret, frame = self.cap.read()
         if not ret:
-            #self.info_label.setText(" No se pudo capturar video")
-            #self.info_label.setStyleSheet("color: red; font-weight: bold;")
+            self.info_label.setText(" No se pudo capturar video")
+            self.info_label.setStyleSheet("color: red; font-weight: bold;")
             return
         
         if properties.CAMERA_ID == 2:
@@ -339,7 +339,9 @@ class ARApp(ARAppDesigner):
 
             feets_in_range = ankles_in_range and heels_in_range and toes_in_range
             
-            properties.should_project = feets_in_range
+            properties.should_project = feets_in_range and visible_body
+
+            #logger.warning(f"Should project; {properties.should_project} \n feets_in_range {feets_in_range} \n visible_body {visible_body}")
 
             should_project = properties.should_project
             #logger.warning(f"\nankles_in_range: {ankles_in_range} \nheels_in_range: {heels_in_range} \n toes_in_range: {toes_in_range}\nfeets_in_range: {feets_in_range} \n should_project: {should_project}")
@@ -358,15 +360,23 @@ class ARApp(ARAppDesigner):
                 frame = cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0)
 
             if not properties.should_project:
-                self._show_gif_overlay()                
+                #self._hide_gif_overlay()
+   
+                #self.show_silhouette_overlay()
+                
+                # Mostrar información de debug
+                status = "EN RANGO" if should_project else "        FUERA DE RANGO \n POR FAVOR POSICIONATE EN LA SILUETA"
+                color = (0, 255, 0) if should_project else (0, 0, 255)
+                self.info_label.setText(f" {status} ")
+                self.info_label.setStyleSheet(f"color: {color}; font-weight: bold;")
     
             else:      
                 #if visible_shoulders and visible_hips and self.model_renderer:
+                self.show_silhouette_overlay()
+                self._hide_gif_overlay()
+
                 if visible_body and should_project and self.model_renderer:
-                    self._hide_gif_overlay()
-
                     self.frames_without_pose = 0
-
                     # Calcular coordenadas del torso
                     left_shoulder_x = int(landmarks[SHOULDER_LEFT].x * w)
                     left_shoulder_y = int(landmarks[SHOULDER_LEFT].y * h)
@@ -484,6 +494,12 @@ class ARApp(ARAppDesigner):
         rgba = twoD_Render.opengl_to_transparent_rgba(raw_frame)
         return rgba
     
+    def show_silhouette_overlay(self):
+        pixmap = QPixmap(properties.resources.silhouette)
+        self.silhouette_label.setPixmap(pixmap)
+        self.silhouette_label.raise_()   
+        self.silhouette_label.show()
+
     def on_closing(self):
 
         self.closeWindowSignal.emit()

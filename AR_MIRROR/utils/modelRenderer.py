@@ -9,6 +9,7 @@ from OpenGL.GL import *
 from OpenGL.GLU import *
 
 from utils.app_args import args
+from properties.properties import properties
 from utils.textureRenderer import TextureRenderer
 
 Y_OFFSET = -0.03 
@@ -90,9 +91,7 @@ class ModelRenderer:
     
     def _compile_shaders(self):
 
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        parent_dir = os.path.dirname(current_dir)
-        shader_dir = os.path.join(parent_dir, "shaders")
+        shader_dir = properties.resources.shaders_dir
 
         # Cargar shaders simplificados (sin normal mapping)
         vertex_source = self._load_shader_file(os.path.join(shader_dir, "texture_vertex.glsl"))
@@ -147,9 +146,7 @@ class ModelRenderer:
     
     def _compile_debug_shaders(self):
 
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        parent_dir = os.path.dirname(current_dir)
-        shader_dir = os.path.join(parent_dir, "shaders")
+        shader_dir = properties.resources.shaders_dir
         
         # Cargar shaders para debug
         debug_vertex_source = self._load_shader_file(os.path.join(shader_dir, "vertex.glsl"))
@@ -213,32 +210,6 @@ class ModelRenderer:
         glfw.hide_window(self.window)
         if args.debug:
             logger.debug(f" Contexto OpenGL creado")
-
-    def _load_default_textures(self):
-
-        textures_dir = os.path.expanduser('~/AR_python/Aumented_Reality/AR_MIRROR/models/textures/')
-        
-        # Solo cargar textura básica por compatibilidad
-        texture_path = os.path.join(textures_dir, "white_solid.png")
-        normal_path = os.path.join(textures_dir, "white_solid_normal.png")
-        
-        if os.path.exists(texture_path):
-            # Cargar textura difusa
-            if self.texture_renderer.load_texture("t_shirt", texture_path, "diffuse"):
-                #print(f" Textura difusa 't_shirt' cargada")
-                
-                # Intentar cargar textura normal
-                #if os.path.exists(normal_path):
-                #    if self.texture_renderer.load_texture("t_shirt", normal_path, "normal"):
-                #        print(f" Mapa de normales 't_shirt' cargado")
-                #else:
-                #    print(f"  Mapa de normales no encontrado para 't_shirt'")
-                
-                self.texture_renderer.set_active_texture("t_shirt")
-            else:
-                logger.warning(f" No se pudo cargar textura: {texture_path}")
-        else:
-            logger.warning(f" No se encontró textura en: {texture_path}")
     
     def load_texture_pair(self, name: str, diffuse_path: str, normal_path: str = None) -> bool:
 
@@ -591,7 +562,7 @@ class ModelRenderer:
         
     
     def _draw_model(self):
-        """Dibuja el modelo sin normal mapping"""
+
         glUseProgram(self.shader_program)
 
         # Pasar matrices a shaders

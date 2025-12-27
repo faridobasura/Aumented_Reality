@@ -11,13 +11,6 @@ from utils.objectLoader import ObjModel
 from properties.properties import properties
 from utils.logger import logger, set_log_level
 
-# Constantes
-
-
-# Rutas de archivos
-TWOD_SHIRT_PATH = os.path.expanduser('~/AR_python/Aumented_Reality/AR_MIRROR/models/Black_T_Shirt_PNG_Clip_Art-3107.png')
-SHIRT_OBJ_PATH = os.path.expanduser('~/AR_python/Aumented_Reality/AR_MIRROR/models/obj/new_shirt.obj')
-
 if args.debug:
     set_log_level('debug')
 else:
@@ -46,7 +39,7 @@ class ARController:
 
         # Cargar modelo 3D
         try:
-            obj_loaded = ObjModel.load_obj(SHIRT_OBJ_PATH)
+            obj_loaded = ObjModel.load_obj(properties.resources.shirt_obj_path)
             logger.info(f"Modelo cargado: {len(obj_loaded.vertices)} vértices")
         except Exception as e:
             logger.warning(f"Error cargando modelo: {e}")
@@ -75,8 +68,6 @@ class ARController:
             mp_drawing=mp_drawing,
             pose_connections=pose_connections,
             obj_loaded=obj_loaded,
-            textures_dir=args.textures_dir,
-            twoD_shirth_path=TWOD_SHIRT_PATH
         )
         if properties.settings.Fullscreen:
             # Mostrar inmediatamente en fullscreen

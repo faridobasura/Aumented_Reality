@@ -40,7 +40,7 @@ void main()
         vec3 diffuse = vec3(0.4) * diff;
         
         // Luz ambiental fuerte
-        vec3 ambient = vec3(0.85);
+        vec3 ambient = vec3(0.7);
         
         // Combinar iluminación
         vec3 lighting = ambient + diffuse;

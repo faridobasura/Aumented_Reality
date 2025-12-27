@@ -31,8 +31,8 @@ class DebugWindow(QMainWindow):
         central = QWidget()
         layout = QVBoxLayout(central)
 
-        self.info_label = QLabel(" Debug Mode Active")
-        self.info_label.setStyleSheet("color: red; font-weight: bold;")
+        self.info_label = QLabel("")
+        self.info_label.setStyleSheet("color: green; font-weight: bold;")
 
         self.controller.create_control_section(layout)
 
@@ -58,6 +58,7 @@ class ARAppDesigner(QMainWindow):
         self.gif_timer.timeout.connect(self._update_gif_frame)
         self.gif_path = None  # Ruta al GIF que usarás
 
+        
         self.load_out_of_range_gif(OUT_OF_RANGE_GIF)  
 
         if not properties.settings.Fullscreen:
@@ -83,6 +84,10 @@ class ARAppDesigner(QMainWindow):
         self.debug_window = DebugWindow(controller=self)
         self.debug_window.show()
         logger.info("Ventana debug abierta")
+        QTimer.singleShot(10, lambda: [
+            self.raise_(),
+            self.activateWindow()
+        ])
     
     def init_ui(self):
         self.setWindowTitle("Espejo AR")
@@ -92,6 +97,9 @@ class ARAppDesigner(QMainWindow):
         # Layout principal horizontal
         main_widget = QWidget()
         main_layout = QHBoxLayout()
+
+        self.info_label = QLabel(" ESPEJO AR ")
+        self.info_label.setStyleSheet("color: blue; font-weight: bold;")
 
         self.gif_overlay_label = QLabel(self)
         self.gif_overlay_label.setStyleSheet("""
@@ -106,6 +114,13 @@ class ARAppDesigner(QMainWindow):
         self.gif_overlay_label.lower()  # Enviar atrás inicialmente
         self.gif_overlay_label.hide()
         
+        self.silhouette_label = QLabel(self)
+        self.silhouette_label.setStyleSheet("background: transparent;")
+        self.silhouette_label.setGeometry(0, 0, int(properties.WINDOW_WIDTH*0.15),int(properties.WINDOW_HEIGHT*0.86))
+        self.silhouette_label.setScaledContents(True)
+        self.silhouette_label.move(int(properties.WINDOW_WIDTH*0.42),int(properties.WINDOW_HEIGHT*0.1))
+        self.silhouette_label.hide()
+
         # === PANEL central: VIDEO ===
         central_panel_widget = QWidget()
         central_panel_layout = QVBoxLayout(central_panel_widget)
@@ -429,19 +444,19 @@ class ARAppDesigner(QMainWindow):
         if hasattr(self, 'debug_window') and self.debug_window:
             if not self.isFullScreen():
                 # Posicionar ventana debug relativa a la principal
-                main_geometry = self.geometry()
-                debug_x = main_geometry.x() + main_geometry.width() + 10
-                debug_y = main_geometry.y()
-                self.debug_window.move(debug_x, debug_y)
+                self.debug_window.move(int(properties.WINDOW_WIDTH*0.9), int(properties.WINDOW_HEIGHT*0.35))
 
         if hasattr(self, 'gif_overlay_label'):
             window_width = self.width()
             window_height = self.height()
             self.gif_overlay_label.setGeometry(0, 0, window_width, window_height)
 
-            # Si está visible, actualizar el pixmap
-            if self.gif_overlay_label.isVisible():
-                self._show_gif_overlay()
+        if hasattr(self, 'silhouette_label'):
+            #self.gif_overlay_label.setGeometry(0, 0, window_width, window_height)
+            window_width = self.width()
+            window_height = self.height()
+            #self.silhouette_label.setGeometry(0, 0, int(window_width*0.35),int(window_height*0.98))
+
 
     def load_out_of_range_gif(self, gif_path):
         try:
@@ -468,7 +483,8 @@ class ARAppDesigner(QMainWindow):
                 logger.info(f"GIF cargado: {len(self.gif_frames)} frames")
                 self.current_gif_frame_index = 0
                 # Iniciar timer para animar (50ms = 20 fps)
-                self.gif_timer.start(50)
+                if not args.debug and not properties.should_project:
+                    self.gif_timer.start(50)
             else:
                 logger.warning(f"El GIF no contiene frames: {gif_path}")
         except Exception as e:
@@ -479,7 +495,6 @@ class ARAppDesigner(QMainWindow):
         if self.gif_frames:
             self.current_gif_frame_index = (self.current_gif_frame_index + 1) % len(self.gif_frames)
 
-            # Si no está en rango, mostrar el GIF actualizado
             if not properties.should_project:
                 self._show_gif_overlay()
 
@@ -520,7 +535,7 @@ class ARAppDesigner(QMainWindow):
 
 
     def _hide_gif_overlay(self):
-        """Oculta el overlay del GIF"""
+
         if hasattr(self, 'gif_overlay_label'):
             self.gif_overlay_label.hide()
         
