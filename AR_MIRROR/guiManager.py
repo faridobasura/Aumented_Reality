@@ -210,16 +210,14 @@ class ARApp(ARAppDesigner):
         logger.info(f" Cargando texturas desde archivos...")
 
         texture_pairs = [
-            ("new_shirt", "new_shirt_bake_diffuse.png", "new_shirt_bake_normals.png"),
-            ("shirt_spidey", "shirt_spidey_diffuse.png", "new_shirt_bake_normals.png"),
-            ("shirt_new_order", "shirt_diffuse_plc.png", "new_shirt_bake_normals.png"),
+            ("new_shirt", "frontal_white_shirt.png"),
+            ("shirt_spidey", "frontal_pcl_shirt.png"),
+            ("shirt_new_order", "frontal_spidey_shirt.png"),
         ]
         
-        for tex_name, diffuse_file, normal_file in texture_pairs:
+        for tex_name, diffuse_file in texture_pairs:
             import os
-            diffuse_path = os.path.join(self.textures_dir, diffuse_file)
-            normal_path = os.path.join(self.textures_dir, normal_file)
-            
+            diffuse_path = os.path.join(self.textures_dir, diffuse_file)            
             if os.path.exists(diffuse_path):
                 if self.model_renderer.texture_renderer.load_texture(tex_name, diffuse_path, "diffuse"):
                     #print(f" Textura difusa '{tex_name}' cargada")
@@ -339,7 +337,8 @@ class ARApp(ARAppDesigner):
 
             feets_in_range = ankles_in_range and heels_in_range and toes_in_range
             
-            properties.should_project = feets_in_range and visible_body
+            #properties.should_project = feets_in_range and visible_body
+            properties.should_project = visible_hips and visible_shoulders
 
             #logger.warning(f"Should project; {properties.should_project} \n feets_in_range {feets_in_range} \n visible_body {visible_body}")
 

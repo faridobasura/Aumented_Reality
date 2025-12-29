@@ -24,20 +24,20 @@ class ModelRenderer:
         self.obj_model = obj
         self.vertex_count = 0
         
-        #For t-shirt model
+        #Foir new tshirt model
         #self.ANCHOR_VERTEX_IDS = {
-        #    "right_shoulder": 2557,
-        #    "left_shoulder": 2854,
-        #    "right_hip": 2511,
-        #    "left_hip": 3275,
+        #    "right_shoulder": 41191,
+        #    "left_shoulder": 25,
+        #    "right_hip": 7178,
+        #    "left_hip": 41258,
         #}
 
-        #Foir new tshirt model
+        #Foir frontal tshirt model
         self.ANCHOR_VERTEX_IDS = {
-            "right_shoulder": 41191,
-            "left_shoulder": 25,
-            "right_hip": 7178,
-            "left_hip": 41258,
+            "right_shoulder": 21615,
+            "left_shoulder": 21439,
+            "right_hip": 1465,
+            "left_hip": 506,
         }
         
         # Transformaciones

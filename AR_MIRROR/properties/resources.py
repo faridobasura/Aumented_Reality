@@ -31,7 +31,7 @@ class Resources():
         self.shirt_obj_path = os.path.join(
             models_dir,
             'obj',
-            'new_shirt.obj'
+            'shirt_frontal.obj'
         )
         
 
