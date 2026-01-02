@@ -12,7 +12,7 @@ from utils.app_args import args
 from properties.properties import properties
 from utils.textureRenderer import TextureRenderer
 
-Y_OFFSET = -0.03 
+Y_OFFSET = -0.01 
 X_OFFSET = -0.0  
 
 logger = logging.getLogger(__name__)
@@ -51,15 +51,13 @@ class ModelRenderer:
         
         self.base_rotation = np.eye(3, dtype=np.float32)
 
-        if properties.shirt_frontal:
+        if properties.shirt_frontal == True:
             self.base_rotation = rot_180_y
         
         # model_rotation siempre comienza como identidad
         # Las transformaciones dinámicas se aplican aquí
         self.model_rotation = np.eye(3, dtype=np.float32)
-        self.model_scale = 1.0   
-
-        self.model_scale = 1.0
+        self.model_scale = 1.15   
 
         if obj.has_texture_coordinates():
             if args.debug:
@@ -534,7 +532,7 @@ class ModelRenderer:
         scale_mat[:3, :3] *= self.model_scale
 
         # 2. ROTACIÓN
-        combined_rotation = self.base_rotation @ self.model_rotation
+        combined_rotation = self.model_rotation @ self.base_rotation
         rot_mat = np.eye(4, dtype=np.float32)
         rot_mat[:3, :3] = combined_rotation
 
@@ -550,7 +548,7 @@ class ModelRenderer:
         self.view_matrix[2, 3] = -3.0  # Cámara en Z = -3.0
 
         # 6. PROYECCIÓN
-        fov = 40.0  # Reducido de 60° a 45° para menos distorsión
+        fov = 30.0  # Reducido de 60° a 45° para menos distorsión
         aspect = self.width / max(self.height, 1)
         near = 0.1
         far = 100.0
@@ -760,7 +758,8 @@ class ModelRenderer:
             corrected_point[1] = -corrected_point[1]
             
             #  Invertir Z (para que el modelo mire hacia la cámara)
-            corrected_point[2] = -corrected_point[2]
+#            if properties.shirt_frontal == False:
+#                corrected_point[2] = -corrected_point[2]
             
             corrected_landmarks[name] = corrected_point
 
@@ -804,7 +803,13 @@ class ModelRenderer:
             Vt[-1, :] *= -1
             rotation = Vt.T @ U.T
         
-        
+        #Corregir Y para que se incline con nosotros
+        pitch, yaw, roll = rotation_matrix_to_euler_xyz(rotation)
+
+        pitch *= -1
+
+        rotation = euler_xyz_to_rotation_matrix(pitch, yaw, roll)
+
         if args.debug:
             logger.debug(f" ROTACIÓN CORREGIDA:")
             for i in range(3):
@@ -875,7 +880,7 @@ class ModelRenderer:
                     model_point = np.array(self.obj_model.vertices[vertex_id])
 
                     # Aplicar transformación con rotación base incluida
-                    combined_rotation = self.model_rotation @ self.base_rotation
+                    combined_rotation =  self.base_rotation @ self.model_rotation
                     transformed_point = self.model_scale * (combined_rotation @ model_point) + self.model_translation
 
                     # Punto objetivo
@@ -974,7 +979,88 @@ class ModelRenderer:
             else:
                 logger.debug(f"    Modo renderizado: {self.render_mode}")
 
+def rotation_matrix_to_euler_xyz(R):
+    """
+    Convención XYZ (pitch = X)
+    """
+    sy = np.sqrt(R[0,0]**2 + R[1,0]**2)
+
+    singular = sy < 1e-6
+
+    if not singular:
+        x = np.arctan2(R[2,1], R[2,2])  # pitch
+        y = np.arctan2(-R[2,0], sy)     # yaw
+        z = np.arctan2(R[1,0], R[0,0])  # roll
+    else:
+        x = np.arctan2(-R[1,2], R[1,1])
+        y = np.arctan2(-R[2,0], sy)
+        z = 0
+
+    return x, y, z
+
+
+def euler_xyz_to_rotation_matrix(x, y, z):
+    cx, cy, cz = np.cos([x, y, z])
+    sx, sy, sz = np.sin([x, y, z])
+
+    Rx = np.array([
+        [1, 0, 0],
+        [0, cx, -sx],
+        [0, sx, cx]
+    ])
+
+    Ry = np.array([
+        [cy, 0, sy],
+        [0, 1, 0],
+        [-sy, 0, cy]
+    ])
+
+    Rz = np.array([
+        [cz, -sz, 0],
+        [sz, cz, 0],
+        [0, 0, 1]
+    ])
+
+    return Rz @ Ry @ Rx
+
+def debug_model_orientation(self):
+    """Debug visual de la orientación del modelo"""
+    logger.debug("\n=== ORIENTACIÓN DEL MODELO ===")
     
+    # Puntos de referencia
+    reference_points = {
+        "front": [0, 0, 1],
+        "up": [0, 1, 0],
+        "right": [1, 0, 0]
+    }
+    
+    # Aplicar rotación actual
+    for name, point in reference_points.items():
+        point_np = np.array(point, dtype=np.float32)
+        
+        # Aplicar todas las rotaciones
+        if hasattr(self, 'corrective_rotation'):
+            point_np = self.corrective_rotation @ point_np
+        if hasattr(self, 'base_rotation'):
+            point_np = self.base_rotation @ point_np
+        if hasattr(self, 'model_rotation') and self.model_rotation is not None:
+            point_np = self.model_rotation @ point_np
+            
+        logger.debug(f"{name}: {point} -> {point_np}")
+    
+    # Matriz de rotación combinada
+    combined = np.eye(3)
+    if hasattr(self, 'model_rotation') and self.model_rotation is not None:
+        combined = self.model_rotation
+    if hasattr(self, 'base_rotation'):
+        combined = self.base_rotation @ combined
+    if hasattr(self, 'corrective_rotation'):
+        combined = self.corrective_rotation @ combined
+        
+    logger.debug("\nMatriz de rotación combinada:")
+    for i in range(3):
+        logger.debug(f"[{combined[i,0]:.3f}, {combined[i,1]:.3f}, {combined[i,2]:.3f}]")
+
 def debug_print_matrix(name, matrix):
 
     logger.debug(f"{name}:")
