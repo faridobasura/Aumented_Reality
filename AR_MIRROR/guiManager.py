@@ -211,8 +211,8 @@ class ARApp(ARAppDesigner):
 
         texture_pairs = [
             ("new_shirt", "frontal_white_shirt.png"),
-            ("shirt_spidey", "frontal_pcl_shirt.png"),
-            ("shirt_new_order", "frontal_spidey_shirt.png"),
+            ("shirt_spidey", "frontal_spidey_shirt.png"),
+            ("shirt_new_order", "frontal_pcl_shirt.png"),
         ]
         
         for tex_name, diffuse_file in texture_pairs:
@@ -374,7 +374,9 @@ class ARApp(ARAppDesigner):
                 self.show_silhouette_overlay()
                 self._hide_gif_overlay()
 
-                if visible_body and should_project and self.model_renderer:
+                #if visible_body and should_project and self.model_renderer:
+                if should_project and self.model_renderer:
+
                     self.frames_without_pose = 0
                     # Calcular coordenadas del torso
                     left_shoulder_x = int(landmarks[SHOULDER_LEFT].x * w)

@@ -372,7 +372,7 @@ class ModelRenderer:
         if self.obj_model.has_texture_coordinates() and self.obj_model.has_normals():
             positions, tex_coords, normals = self._expand_faces_with_uvs_normals()
         elif self.obj_model.has_texture_coordinates():
-            positions, tex_coords = self._expand_faces_with_uvs()
+            positions, tex_coords = self._expand_faces_with_uvs_normals()
             normals = self._generate_flat_normals(positions)
         else:
             positions = self._expand_faces()
