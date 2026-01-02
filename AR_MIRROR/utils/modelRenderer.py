@@ -42,7 +42,23 @@ class ModelRenderer:
         
         # Transformaciones
         self.model_translation = np.zeros(3, dtype=np.float32)
+                # Aplicar rotación 180° en Y SOLO UNA VEZ
+        rot_180_y = np.array([
+            [-1.0, 0.0,  0.0],
+            [ 0.0, 1.0,  0.0],
+            [ 0.0, 0.0, -1.0]
+        ], dtype=np.float32)
+        
+        self.base_rotation = np.eye(3, dtype=np.float32)
+
+        if properties.shirt_frontal:
+            self.base_rotation = rot_180_y
+        
+        # model_rotation siempre comienza como identidad
+        # Las transformaciones dinámicas se aplican aquí
         self.model_rotation = np.eye(3, dtype=np.float32)
+        self.model_scale = 1.0   
+
         self.model_scale = 1.0
 
         if obj.has_texture_coordinates():
@@ -518,8 +534,9 @@ class ModelRenderer:
         scale_mat[:3, :3] *= self.model_scale
 
         # 2. ROTACIÓN
+        combined_rotation = self.base_rotation @ self.model_rotation
         rot_mat = np.eye(4, dtype=np.float32)
-        rot_mat[:3, :3] = self.model_rotation
+        rot_mat[:3, :3] = combined_rotation
 
         # 3. TRASLACIÓN
         trans_mat = np.eye(4, dtype=np.float32)
@@ -533,7 +550,7 @@ class ModelRenderer:
         self.view_matrix[2, 3] = -3.0  # Cámara en Z = -3.0
 
         # 6. PROYECCIÓN
-        fov = 50.0  # Reducido de 60° a 45° para menos distorsión
+        fov = 40.0  # Reducido de 60° a 45° para menos distorsión
         aspect = self.width / max(self.height, 1)
         near = 0.1
         far = 100.0
@@ -758,7 +775,8 @@ class ModelRenderer:
             if name in corrected_landmarks:
                 vertex_id = self.ANCHOR_VERTEX_IDS[name]
                 if vertex_id < len(self.obj_model.vertices):
-                    model_points.append(np.array(self.obj_model.vertices[vertex_id]))
+                    model_vertex = np.array(self.obj_model.vertices[vertex_id])
+                    model_points.append(model_vertex)
                     target_points.append(corrected_landmarks[name])
         
         if len(model_points) < 2:
@@ -786,14 +804,6 @@ class ModelRenderer:
             Vt[-1, :] *= -1
             rotation = Vt.T @ U.T
         
-        # Aplicar rotación 180° en Y SOLO UNA VEZ
-        rot_180_y = np.array([
-            [-1.0, 0.0,  0.0],
-            [ 0.0, 1.0,  0.0],
-            [ 0.0, 0.0, -1.0]
-        ], dtype=np.float32)
-        
-        rotation = rotation
         
         if args.debug:
             logger.debug(f" ROTACIÓN CORREGIDA:")
@@ -842,7 +852,9 @@ class ModelRenderer:
             logger.debug(f"   Traslación final: {translation}")
         
         # Aplicar transformación
+
         self.model_rotation = rotation
+
         self.model_scale = scale
         self.model_translation = translation
         
@@ -862,8 +874,9 @@ class ModelRenderer:
                     # Punto del modelo
                     model_point = np.array(self.obj_model.vertices[vertex_id])
 
-                    # Aplicar transformación CORRECTA: s * R * p + T
-                    transformed_point = self.model_scale * (self.model_rotation @ model_point) + self.model_translation
+                    # Aplicar transformación con rotación base incluida
+                    combined_rotation = self.model_rotation @ self.base_rotation
+                    transformed_point = self.model_scale * (combined_rotation @ model_point) + self.model_translation
 
                     # Punto objetivo
                     target_point = np.array(landmarks_3d_corrected[name])
@@ -890,7 +903,7 @@ class ModelRenderer:
 
             return avg_error
         return 0.0
-
+    
     def cleanup(self):
         logger.info(" Limpiando recursos OpenGL...")
 

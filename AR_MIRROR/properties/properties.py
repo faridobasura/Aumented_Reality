@@ -16,5 +16,7 @@ class Properties():
         self.WINDOW_WIDTH = 1024
         self.WINDOW_HEIGHT = 1024
 
+        self.shirt_frontal = True
+
         self.should_project = False
 properties = Properties()
