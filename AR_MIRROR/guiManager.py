@@ -209,11 +209,25 @@ class ARApp(ARAppDesigner):
         
         logger.info(f" Cargando texturas desde archivos...")
 
-        texture_pairs = [
-            ("new_shirt", "frontal_white_shirt.png"),
-            ("shirt_spidey", "frontal_spidey_shirt.png"),
-            ("shirt_new_order", "frontal_pcl_shirt.png"),
-        ]
+        self.texture_pairs_dict = {
+            "new_shirt": [
+                ("new_shirt", "new_shirt_white.png"),
+                ("shirt_spidey", "new_shirt_plc.png"),
+                ("shirt_new_order", "new_shirt_spidey.png"),
+            ],
+            "new_shirt_frontal": [
+                ("new_shirt", "frontal_white_shirt.png"),
+                ("shirt_spidey", "frontal_spidey_shirt.png"),
+                ("shirt_new_order", "frontal_pcl_shirt.png"),
+            ],
+            "playeraM_v1": [
+                ("new_shirt", "bake_playeraM_v1.png"),
+                ("shirt_spidey", "frontal_spidey_shirt.png"),
+                ("shirt_new_order", "frontal_pcl_shirt.png"),
+            ]
+        } 
+
+        texture_pairs = self.texture_pairs_dict["playeraM_v1"]
         
         for tex_name, diffuse_file in texture_pairs:
             import os

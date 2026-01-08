@@ -28,10 +28,25 @@ class Resources():
             'Black_T_Shirt_PNG_Clip_Art-3107.png'
         )
         
-        self.shirt_obj_path = os.path.join(
-            models_dir,
-            'obj',
-            'shirt_frontal.obj'
-        )
+
+        self.shirt_obj_paths = {
+            "new_shirt" : os.path.join(
+                models_dir,
+                'obj',
+                'new_shirt.obj'
+            ),
+            "new_shirt_frontal" : os.path.join(
+                models_dir,
+                'obj',
+                'shirt_frontal.obj'
+            ),
+            "playeraM_v1" : os.path.join(
+                models_dir,
+                'obj',
+                'playeraM_v1.0.obj'
+            ),
+        }
+        
+        self.shirt_obj_path = self.shirt_obj_paths["playeraM_v1"]
         
 

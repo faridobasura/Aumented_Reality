@@ -25,21 +25,31 @@ class ModelRenderer:
         self.vertex_count = 0
         
         #Foir new tshirt model
-        #self.ANCHOR_VERTEX_IDS = {
-        #    "right_shoulder": 41191,
-        #    "left_shoulder": 25,
-        #    "right_hip": 7178,
-        #    "left_hip": 41258,
-        #}
 
-        #Foir frontal tshirt model
-        self.ANCHOR_VERTEX_IDS = {
-            "right_shoulder": 21615,
-            "left_shoulder": 21439,
-            "right_hip": 1465,
-            "left_hip": 506,
+        self.ANCHOR_VERTEX_DICT = {
+            "new_shirt": {
+                "right_shoulder": 41191,
+                "left_shoulder": 25,
+                "right_hip": 7178,
+                "left_hip": 41258,
+            },
+            "new_shirt_frontal": {
+                "right_shoulder": 21615,
+                "left_shoulder": 21439,
+                "right_hip": 1465,
+                "left_hip": 506,
+            },
+
+            "playeraM_v1": {
+                "right_shoulder": 29252,
+                "left_shoulder": 1371,
+                "right_hip": 10616,
+                "left_hip": 28388,
+            }
         }
-        
+
+        self.ANCHOR_VERTEX_IDS = self.ANCHOR_VERTEX_DICT["playeraM_v1"]
+
         # Transformaciones
         self.model_translation = np.zeros(3, dtype=np.float32)
                 # Aplicar rotación 180° en Y SOLO UNA VEZ
